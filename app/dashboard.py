@@ -2037,6 +2037,7 @@ def atualizar_tabela_pag(status, periodo, dt_ini, dt_fim, busca, _filtrar, tab, 
     Output("store-refresh-pag",       "data"),
     Output("btn-modal-pag-confirmar", "style"),
     Output("pag-form-row",            "style"),
+    Output("inp-pag-data",            "value"),
     Input({"type": "btn-baixar-pag",  "index": ALL}, "n_clicks"),
     Input({"type": "btn-ver-pag",     "index": ALL}, "n_clicks"),
     Input("btn-modal-pag-cancel",     "n_clicks"),
@@ -2056,7 +2057,7 @@ def controlar_modal_pag(baixar_clicks, ver_clicks, n_cancel, n_confirmar,
     if tid == "btn-modal-pag-cancel":
         if not n_cancel:
             raise PreventUpdate
-        return False, no_update, no_update, "", no_update, no_update, no_update
+        return False, no_update, no_update, "", no_update, no_update, no_update, no_update
 
     if isinstance(tid, dict) and tid.get("type") in ("btn-baixar-pag", "btn-ver-pag"):
         if valor_clicado <= 0:
@@ -2078,6 +2079,7 @@ def controlar_modal_pag(baixar_clicks, ver_clicks, n_cancel, n_confirmar,
         p = dict(p)
         desconto = float(p.get("desconto") or 0)
         valor_liq = float(p["valor"]) - desconto
+        data_sugerida = p.get("data_vencimento") or date.today().isoformat()
 
         info_items = [
             html.Strong(p["aluno_nome"]), html.Br(),
@@ -2095,19 +2097,20 @@ def controlar_modal_pag(baixar_clicks, ver_clicks, n_cancel, n_confirmar,
         if p["status"] == "pago":
             info_items += [html.Br(), "Pago em: ", _fmt_data(p["data_pagamento"]),
                            "  |  Forma: ", p.get("forma") or "—"]
+            data_sugerida = p.get("data_pagamento") or data_sugerida
         info = dbc.Alert(info_items, color="info")
         hide = {"display": "none"} if p["status"] == "pago" else {}
-        return True, pid, info, "", no_update, hide, hide
+        return True, pid, info, "", no_update, hide, hide, data_sugerida
 
     if tid == "btn-modal-pag-confirmar":
         if not n_confirmar:
             raise PreventUpdate
         if not pag_id or not forma:
-            return no_update, no_update, no_update, "Selecione a forma de pagamento.", no_update, no_update, no_update
+            return no_update, no_update, no_update, "Selecione a forma de pagamento.", no_update, no_update, no_update, no_update
         ok, msg = renov_mod.baixar_pagamento(pag_id, forma, data_pag, obs or "")
         if ok:
-            return False, None, "", "", (refresh_val or 0) + 1, {}, {}
-        return no_update, no_update, no_update, msg, no_update, no_update, no_update
+            return False, None, "", "", (refresh_val or 0) + 1, {}, {}, no_update
+        return no_update, no_update, no_update, msg, no_update, no_update, no_update, no_update
 
     raise PreventUpdate
 
@@ -2750,6 +2753,7 @@ def atualizar_perfil_matriculas(filtro, _refresh, aluno_id):
     Output("btn-perfil-pag-confirmar",  "style"),
     Output("perfil-pag-form-row",       "style"),
     Output("store-perfil-refresh",      "data", allow_duplicate=True),
+    Output("inp-perfil-pag-data",       "value"),
     Input({"type": "btn-perfil-ver-pag","index": ALL}, "n_clicks"),
     Input("btn-perfil-pag-cancel",      "n_clicks"),
     Input("btn-perfil-pag-confirmar",   "n_clicks"),
@@ -2768,7 +2772,7 @@ def controlar_modal_perfil_pag(ver_clicks, n_cancel, n_confirmar,
     if tid == "btn-perfil-pag-cancel":
         if not n_cancel:
             raise PreventUpdate
-        return False, no_update, no_update, "", no_update, no_update, no_update
+        return False, no_update, no_update, "", no_update, no_update, no_update, no_update
 
     if isinstance(tid, dict) and tid.get("type") == "btn-perfil-ver-pag":
         if valor <= 0:
@@ -2790,6 +2794,9 @@ def controlar_modal_perfil_pag(ver_clicks, n_cancel, n_confirmar,
         p = dict(p)
         desconto = float(p.get("desconto") or 0)
         valor_liq = float(p["valor"]) - desconto
+        data_sugerida = p.get("data_vencimento") or date.today().isoformat()
+        if p["status"] == "pago":
+            data_sugerida = p.get("data_pagamento") or data_sugerida
         info_items = [
             html.Strong(p["aluno_nome"]), html.Br(),
             html.Span(f"{p['plano']} / {p['modalidade']}", style={"color": "#555"}),
@@ -2806,17 +2813,17 @@ def controlar_modal_perfil_pag(ver_clicks, n_cancel, n_confirmar,
                            "  |  Forma: ", p.get("forma") or "—"]
         info = dbc.Alert(info_items, color="info")
         hide = {"display": "none"} if p["status"] == "pago" else {}
-        return True, pid, info, "", hide, hide, no_update
+        return True, pid, info, "", hide, hide, no_update, data_sugerida
 
     if tid == "btn-perfil-pag-confirmar":
         if not n_confirmar:
             raise PreventUpdate
         if not pag_id or not forma:
-            return no_update, no_update, no_update, "Selecione a forma de pagamento.", no_update, no_update, no_update
+            return no_update, no_update, no_update, "Selecione a forma de pagamento.", no_update, no_update, no_update, no_update
         ok, msg = renov_mod.baixar_pagamento(pag_id, forma, data_pag, obs or "")
         if ok:
-            return False, None, "", "", {}, {}, (refresh or 0) + 1
-        return no_update, no_update, no_update, msg, no_update, no_update, no_update
+            return False, None, "", "", {}, {}, (refresh or 0) + 1, no_update
+        return no_update, no_update, no_update, msg, no_update, no_update, no_update, no_update
 
     raise PreventUpdate
 
