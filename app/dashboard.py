@@ -2757,7 +2757,7 @@ def atualizar_perfil_matriculas(filtro, _refresh, aluno_id):
     for m in matriculas:
         data_fim = date.fromisoformat(m["data_fim"]) if m.get("data_fim") else None
         vence_txt = f"Vence dia {data_fim.day}" if data_fim else "—"
-        vigencia_txt = f"{_fmt_data(m['data_inicio'])} a {_fmt_data(m['data_fim'])}"
+        vigencia_txt = f"{_fmt_data(m['data_inicio'])} até {_fmt_data(m['data_fim'])}"
         periodo = "Mensal" if m.get("meses") == 1 else (
             f"{m['meses']} meses" if m.get("meses") else "—")
         motivo_txt = MOTIVO_MATRICULA_LABELS.get(m.get("motivo_encerramento") or "", "")
@@ -2810,7 +2810,8 @@ def atualizar_perfil_matriculas(filtro, _refresh, aluno_id):
                 html.Div(_fmt_data(m["data_inicio"])),
                 html.Small(vence_txt, style={"color": "#888"}),
                 html.Br(),
-                html.Small(f"Vigência: {vigencia_txt}", style={"color": "#555"}),
+                html.Small("Vigência", style={"color": "#888", "display": "block", "marginTop": "4px"}),
+                html.Small(vigencia_txt, style={"color": "#0d6efd", "fontWeight": "600"}),
                 *( [html.Br(), html.Small(f"Encerrada em {data_enc_txt}", style={"color": "#888"})] if data_enc_txt else [] ),
             ], style={"padding": "10px 14px"}),
             html.Td(periodo, style={"padding": "10px 14px"}),
