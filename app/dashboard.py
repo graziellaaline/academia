@@ -2218,27 +2218,53 @@ def _perfil_tab_style(ativa):
     }
 
 
+def _perfil_tab_bar(tab_ativa):
+    return html.Div([
+        _perfil_tab_btn("financeiro", "FINANCEIRO", tab_ativa == "financeiro"),
+        _perfil_tab_btn("matriculas", "MATRÍCULAS", tab_ativa == "matriculas"),
+        html.Span("TREINOS", style={
+            "color": "#aaa", "padding": "12px 22px", "fontSize": "12px",
+            "fontWeight": "700", "letterSpacing": ".5px", "cursor": "default",
+        }),
+        html.Span("AVALIAÇÕES", style={
+            "color": "#aaa", "padding": "12px 22px", "fontSize": "12px",
+            "fontWeight": "700", "letterSpacing": ".5px", "cursor": "default",
+        }),
+    ], style={"background": COR_PRIMARIA, "display": "flex",
+              "borderRadius": "8px 8px 0 0", "overflow": "hidden"})
+
+
 def _perfil_tab_financeiro(aluno_id):
     hoje = date.today().isoformat()
     return html.Div([
         dcc.Store(id="store-perfil-fin-tipo",   data="cobrancas"),
         dcc.Store(id="store-perfil-fin-filtro", data="abertas"),
         html.Div([
-            dbc.RadioItems(
-                id="perfil-fin-tipo",
-                options=[{"label": "Cobranças",    "value": "cobrancas"},
-                         {"label": "Recebimentos", "value": "recebimentos"}],
-                value="cobrancas", inline=True, className="me-4 perfil-radio-items",
-                inputStyle={"marginRight": "4px"},
-            ),
-            html.Span(style={"borderLeft": "1px solid #ddd", "margin": "0 12px"}),
-            dbc.RadioItems(
-                id="perfil-fin-filtro",
-                options=[{"label": "Abertas",    "value": "abertas"},
-                         {"label": "Canceladas", "value": "canceladas"},
-                         {"label": "Todas",      "value": "todas"}],
-                value="abertas", inline=True, className="perfil-radio-items",
-                inputStyle={"marginRight": "4px"},
+            html.Div([
+                dbc.RadioItems(
+                    id="perfil-fin-tipo",
+                    options=[{"label": "Cobranças",    "value": "cobrancas"},
+                             {"label": "Recebimentos", "value": "recebimentos"}],
+                    value="cobrancas", inline=True, className="me-4 perfil-radio-items",
+                    inputStyle={"marginRight": "4px"},
+                ),
+                html.Span(style={"borderLeft": "1px solid #ddd", "margin": "0 12px"}),
+                dbc.RadioItems(
+                    id="perfil-fin-filtro",
+                    options=[{"label": "Abertas",    "value": "abertas"},
+                             {"label": "Canceladas", "value": "canceladas"},
+                             {"label": "Todas",      "value": "todas"}],
+                    value="abertas", inline=True, className="perfil-radio-items",
+                    inputStyle={"marginRight": "4px"},
+                ),
+            ], className="d-flex align-items-center", style={"flexWrap": "wrap", "gap": "8px"}),
+            dbc.Button(
+                [html.I(className="bi bi-cash-stack me-1"), "Receber selecionadas"],
+                id="btn-perfil-pag-lote",
+                color="success",
+                outline=True,
+                size="sm",
+                className="ms-auto",
             ),
         ], className="d-flex align-items-center p-3 border-bottom",
            style={"flexWrap": "wrap", "gap": "8px"}),
@@ -2364,19 +2390,7 @@ def _aba_perfil_aluno(aluno_id: int):
         dcc.Store(id="store-perfil-edit-id"),
         dcc.Store(id="store-perfil-acao-mat"),
         # Tab buttons
-        html.Div([
-            _perfil_tab_btn("financeiro", "FINANCEIRO", True),
-            _perfil_tab_btn("matriculas", "MATRÍCULAS", False),
-            html.Span("TREINOS", style={
-                "color": "#aaa", "padding": "12px 22px", "fontSize": "12px",
-                "fontWeight": "700", "letterSpacing": ".5px", "cursor": "default",
-            }),
-            html.Span("AVALIAÇÕES", style={
-                "color": "#aaa", "padding": "12px 22px", "fontSize": "12px",
-                "fontWeight": "700", "letterSpacing": ".5px", "cursor": "default",
-            }),
-        ], style={"background": COR_PRIMARIA, "display": "flex",
-                  "borderRadius": "8px 8px 0 0", "overflow": "hidden"}),
+        html.Div(id="perfil-tabs-topo", children=_perfil_tab_bar("financeiro")),
         # Tab content
         html.Div(id="perfil-conteudo-tab",
                  children=_perfil_tab_financeiro(aluno_id),
@@ -2384,7 +2398,7 @@ def _aba_perfil_aluno(aluno_id: int):
                         "border": "1px solid #e0e0e0", "borderTop": "none"}),
         # Modals
         dbc.Modal([
-            dbc.ModalHeader(dbc.ModalTitle([
+            dbc.ModalHeader(dbc.ModalTitle(id="modal-perfil-pag-titulo", children=[
                 html.I(className="bi bi-cash-coin me-2", style={"color": "#198754"}),
                 "Detalhes do Pagamento",
             ])),
@@ -2592,14 +2606,11 @@ def trocar_perfil_tab(n_clicks):
 
 
 @app.callback(
-    Output({"type": "btn-perfil-tab", "index": ALL}, "style"),
+    Output("perfil-tabs-topo", "children"),
     Input("store-perfil-tab", "data"),
 )
 def estilizar_tabs_perfil(tab_ativa):
-    return [
-        _perfil_tab_style(tab_ativa == "financeiro"),
-        _perfil_tab_style(tab_ativa == "matriculas"),
-    ]
+    return _perfil_tab_bar(tab_ativa or "financeiro")
 
 
 @app.callback(
@@ -2614,6 +2625,14 @@ def renderizar_perfil_tab(tab, _refresh, aluno_id):
     if tab == "matriculas":
         return _perfil_tab_matriculas(aluno_id)
     return _perfil_tab_financeiro(aluno_id)
+
+
+def _pagamentos_marcados(ids_componentes, valores_componentes):
+    selecionados = []
+    for comp_id, valor in zip(ids_componentes or [], valores_componentes or []):
+        if valor:
+            selecionados.append(int(comp_id["index"]))
+    return selecionados
 
 
 # ── Perfil: tabela financeiro ─────────────────────────────────────────────
@@ -2679,7 +2698,17 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
             style={"backgroundColor": "#fd7e14", "borderColor": "#fd7e14",
                    "color": "white", "padding": "2px 7px"},
         )
+        chk = ""
+        if tipo == "cobrancas" and p["status"] in ("pendente", "vencido"):
+            chk = dcc.Checklist(
+                id={"type": "chk-perfil-pag", "index": p["id"]},
+                options=[{"label": "", "value": p["id"]}],
+                value=[],
+                inputStyle={"marginRight": "0"},
+                style={"display": "flex", "justifyContent": "center"},
+            )
         linhas.append(html.Tr([
+            html.Td(chk, style={"textAlign": "center", "width": "42px"}),
             html.Td(_fmt_data(p["data_vencimento"]),
                    style={"color": "#dc3545" if is_venc else "#333",
                           "fontWeight": "600", "whiteSpace": "nowrap"}),
@@ -2702,6 +2731,7 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
     else:
         tabela = dbc.Table(
             [html.Thead(html.Tr([
+                html.Th("", style={"width": "42px"}),
                 html.Th("VENCIMENTO",
                         style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
                 html.Th("REFERÊNCIA",
@@ -2857,6 +2887,7 @@ def atualizar_perfil_matriculas(filtro, _refresh, aluno_id):
 
 @app.callback(
     Output("modal-perfil-pag",          "is_open"),
+    Output("modal-perfil-pag-titulo",   "children"),
     Output("store-perfil-pag-id",       "data"),
     Output("modal-perfil-pag-info",     "children"),
     Output("modal-perfil-pag-erro",     "children"),
@@ -2865,24 +2896,29 @@ def atualizar_perfil_matriculas(filtro, _refresh, aluno_id):
     Output("store-perfil-refresh",      "data", allow_duplicate=True),
     Output("inp-perfil-pag-data",       "value"),
     Input({"type": "btn-perfil-ver-pag","index": ALL}, "n_clicks"),
+    Input("btn-perfil-pag-lote",        "n_clicks"),
     Input("btn-perfil-pag-cancel",      "n_clicks"),
     Input("btn-perfil-pag-confirmar",   "n_clicks"),
     State("store-perfil-pag-id",        "data"),
     State("inp-perfil-pag-forma",       "value"),
     State("inp-perfil-pag-data",        "value"),
     State("inp-perfil-pag-obs",         "value"),
+    State({"type": "chk-perfil-pag",  "index": ALL}, "id"),
+    State({"type": "chk-perfil-pag",  "index": ALL}, "value"),
     State("store-perfil-refresh",       "data"),
     prevent_initial_call=True,
 )
-def controlar_modal_perfil_pag(ver_clicks, n_cancel, n_confirmar,
-                                pag_id, forma, data_pag, obs, refresh):
+def controlar_modal_perfil_pag(ver_clicks, n_lote, n_cancel, n_confirmar,
+                                pag_store, forma, data_pag, obs,
+                                chk_ids, chk_vals, refresh):
     tid = callback_context.triggered_id
     valor = (callback_context.triggered[0].get("value") or 0) if callback_context.triggered else 0
+    titulo_padrao = [html.I(className="bi bi-cash-coin me-2", style={"color": "#198754"}), "Detalhes do Pagamento"]
 
     if tid == "btn-perfil-pag-cancel":
         if not n_cancel:
             raise PreventUpdate
-        return False, no_update, no_update, "", no_update, no_update, no_update, no_update
+        return False, titulo_padrao, no_update, no_update, "", no_update, no_update, no_update, no_update
 
     if isinstance(tid, dict) and tid.get("type") == "btn-perfil-ver-pag":
         if valor <= 0:
@@ -2923,17 +2959,56 @@ def controlar_modal_perfil_pag(ver_clicks, n_cancel, n_confirmar,
                            "  |  Forma: ", p.get("forma") or "—"]
         info = dbc.Alert(info_items, color="info")
         hide = {"display": "none"} if p["status"] == "pago" else {}
-        return True, pid, info, "", hide, hide, no_update, data_sugerida
+        return True, titulo_padrao, {"ids": [pid], "modo": "unico"}, info, "", hide, hide, no_update, data_sugerida
+
+    if tid == "btn-perfil-pag-lote":
+        if not n_lote:
+            raise PreventUpdate
+        selecionados = _pagamentos_marcados(chk_ids, chk_vals)
+        if not selecionados:
+            return True, [html.I(className="bi bi-cash-stack me-2", style={"color": "#198754"}), "Receber Selecionadas"], None, dbc.Alert("Selecione ao menos uma mensalidade em aberto.", color="warning"), "", {}, {}, no_update, date.today().isoformat()
+
+        conn = get_conn()
+        placeholders = ",".join("?" * len(selecionados))
+        rows = conn.execute(f"""
+            SELECT p.*, a.nome AS aluno_nome, tp.nome AS plano, mod.nome AS modalidade
+            FROM pagamentos p
+            JOIN alunos a ON a.id = p.aluno_id
+            JOIN matriculas m ON m.id = p.matricula_id
+            JOIN tipos_plano tp ON tp.id = m.tipo_plano_id
+            JOIN modalidades mod ON mod.id = m.modalidade_id
+            WHERE p.id IN ({placeholders})
+            ORDER BY date(p.data_vencimento), p.id
+        """, tuple(selecionados)).fetchall()
+        conn.close()
+        rows = [dict(r) for r in rows if r["status"] in ("pendente", "vencido")]
+        if not rows:
+            return True, [html.I(className="bi bi-cash-stack me-2", style={"color": "#198754"}), "Receber Selecionadas"], None, dbc.Alert("Nenhuma mensalidade selecionada pode ser recebida agora.", color="warning"), "", {}, {}, no_update, date.today().isoformat()
+
+        total = sum(float(r["valor"]) - float(r.get("desconto") or 0) for r in rows)
+        info = dbc.Alert([
+            html.Strong(rows[0]["aluno_nome"]), html.Br(),
+            html.Span(f"{len(rows)} mensalidade(s) selecionada(s)"), html.Br(),
+            html.Ul([
+                html.Li(f"{_fmt_data(r['data_vencimento'])} — {r['plano']} / {r['modalidade']} — {_fmt_brl(float(r['valor']) - float(r.get('desconto') or 0))}")
+                for r in rows
+            ], className="mb-2 mt-2"),
+            html.Span("Total: "), html.Strong(_fmt_brl(total)),
+        ], color="info")
+        return True, [html.I(className="bi bi-cash-stack me-2", style={"color": "#198754"}), "Receber Selecionadas"], {"ids": [r["id"] for r in rows], "modo": "lote"}, info, "", {}, {}, no_update, date.today().isoformat()
 
     if tid == "btn-perfil-pag-confirmar":
         if not n_confirmar:
             raise PreventUpdate
-        if not pag_id or not forma:
-            return no_update, no_update, no_update, "Selecione a forma de pagamento.", no_update, no_update, no_update, no_update
-        ok, msg = renov_mod.baixar_pagamento(pag_id, forma, data_pag, obs or "")
+        if not pag_store or not pag_store.get("ids") or not forma:
+            return no_update, no_update, no_update, no_update, "Selecione a forma de pagamento.", no_update, no_update, no_update, no_update
+        if len(pag_store["ids"]) > 1:
+            ok, msg = renov_mod.baixar_pagamentos_lote(pag_store["ids"], forma, data_pag, obs or "")
+        else:
+            ok, msg = renov_mod.baixar_pagamento(pag_store["ids"][0], forma, data_pag, obs or "")
         if ok:
-            return False, None, "", "", {}, {}, (refresh or 0) + 1, no_update
-        return no_update, no_update, no_update, msg, no_update, no_update, no_update, no_update
+            return False, titulo_padrao, None, "", "", {}, {}, (refresh or 0) + 1, no_update
+        return no_update, no_update, no_update, no_update, msg, no_update, no_update, no_update, no_update
 
     raise PreventUpdate
 

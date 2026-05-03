@@ -27,6 +27,44 @@ def _hoje() -> date:
     return date.today()
 
 
+def _baixar_pagamento_cursor(c, pagamento_id: int, forma: str,
+                            data_pag: str, observacoes: str, hoje: date):
+    pag = c.execute("SELECT * FROM pagamentos WHERE id=?", (pagamento_id,)).fetchone()
+    if not pag:
+        return False, "Pagamento não encontrado."
+    if pag["status"] == "pago":
+        return False, "Pagamento já foi baixado."
+    if pag["status"] == "cancelado":
+        return False, "Pagamento cancelado não pode ser recebido."
+
+    c.execute("""
+        UPDATE pagamentos
+        SET status='pago', data_pagamento=?, forma=?, observacoes=?
+        WHERE id=?
+    """, (data_pag, forma, observacoes, pagamento_id))
+
+    mat = c.execute("""
+        SELECT m.*, tp.meses
+        FROM   matriculas m
+        JOIN   tipos_plano tp ON tp.id = m.tipo_plano_id
+        WHERE  m.id = ?
+    """, (pag["matricula_id"],)).fetchone()
+
+    if mat:
+        data_fim_atual = date.fromisoformat(mat["data_fim"])
+        base = hoje if data_fim_atual < hoje else data_fim_atual
+        nova_data_fim = base + relativedelta(months=mat["meses"])
+
+        c.execute("""
+            UPDATE matriculas
+            SET data_fim=?, status='ativo'
+            WHERE id=?
+        """, (nova_data_fim.isoformat(), mat["id"]))
+        c.execute("UPDATE alunos SET status='ativo' WHERE id=?", (mat["aluno_id"],))
+
+    return True, "Pagamento confirmado e matrícula renovada."
+
+
 def verificar_vencimentos():
     """
     Roda na inicialização e pode ser chamada a qualquer momento.
@@ -113,49 +151,34 @@ def baixar_pagamento(pagamento_id: int, forma: str, data_pagamento: str = None, 
 
     conn = get_conn()
     c = conn.cursor()
-
-    pag = c.execute("SELECT * FROM pagamentos WHERE id=?", (pagamento_id,)).fetchone()
-    if not pag:
+    ok, msg = _baixar_pagamento_cursor(c, pagamento_id, forma, data_pag, observacoes, hoje)
+    if not ok:
         conn.close()
-        return False, "Pagamento não encontrado."
+        return False, msg
+    conn.commit()
+    conn.close()
+    return True, msg
 
-    if pag["status"] == "pago":
-        conn.close()
-        return False, "Pagamento já foi baixado."
 
-    # Atualiza o pagamento
-    c.execute("""
-        UPDATE pagamentos
-        SET status='pago', data_pagamento=?, forma=?, observacoes=?
-        WHERE id=?
-    """, (data_pag, forma, observacoes, pagamento_id))
+def baixar_pagamentos_lote(pagamento_ids, forma: str, data_pagamento: str = None, observacoes: str = ""):
+    if not pagamento_ids:
+        return False, "Selecione pelo menos uma mensalidade."
 
-    # Estende a matrícula
-    mat = c.execute("""
-        SELECT m.*, tp.meses
-        FROM   matriculas m
-        JOIN   tipos_plano tp ON tp.id = m.tipo_plano_id
-        WHERE  m.id = ?
-    """, (pag["matricula_id"],)).fetchone()
+    hoje = _hoje()
+    data_pag = data_pagamento or hoje.isoformat()
+    conn = get_conn()
+    c = conn.cursor()
 
-    if mat:
-        data_fim_atual = date.fromisoformat(mat["data_fim"])
-        # Se a matrícula já venceu, renova a partir de hoje; senão, estende do fim atual
-        base = hoje if data_fim_atual < hoje else data_fim_atual
-        nova_data_fim = base + relativedelta(months=mat["meses"])
-
-        c.execute("""
-            UPDATE matriculas
-            SET data_fim=?, status='ativo'
-            WHERE id=?
-        """, (nova_data_fim.isoformat(), mat["id"]))
-
-        # Atualiza status do aluno
-        c.execute("UPDATE alunos SET status='ativo' WHERE id=?", (mat["aluno_id"],))
+    for pagamento_id in pagamento_ids:
+        ok, msg = _baixar_pagamento_cursor(c, int(pagamento_id), forma, data_pag, observacoes, hoje)
+        if not ok:
+            conn.rollback()
+            conn.close()
+            return False, msg
 
     conn.commit()
     conn.close()
-    return True, "Pagamento confirmado e matrícula renovada."
+    return True, f"{len(pagamento_ids)} mensalidade(s) recebida(s) com sucesso."
 
 
 def cancelar_pagamento(pagamento_id: int):
