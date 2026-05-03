@@ -1,0 +1,29 @@
+.perfil-tab-btn:hover {
+  filter: brightness(1.08);
+}
+
+#perfil-fin-tipo .form-check,
+#perfil-fin-filtro .form-check,
+#perfil-mat-filtro .form-check {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 14px;
+  margin-bottom: 0;
+}
+
+#perfil-fin-tipo .form-check-label,
+#perfil-fin-filtro .form-check-label,
+#perfil-mat-filtro .form-check-label {
+  padding: 6px 10px;
+  border-radius: 999px;
+  transition: all 0.18s ease;
+  color: #334155;
+}
+
+#perfil-fin-tipo .form-check-input:checked + .form-check-label,
+#perfil-fin-filtro .form-check-input:checked + .form-check-label,
+#perfil-mat-filtro .form-check-input:checked + .form-check-label {
+  background: rgba(13, 110, 253, 0.12);
+  color: #0d6efd;
+  font-weight: 700;
+}

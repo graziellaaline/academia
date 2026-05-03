@@ -2198,6 +2198,7 @@ def _perfil_tab_btn(tab_id, label, ativa):
     return html.Button(
         label,
         id={"type": "btn-perfil-tab", "index": tab_id},
+        className="perfil-tab-btn",
         n_clicks=0,
         style=_perfil_tab_style(ativa),
     )
@@ -2210,6 +2211,10 @@ def _perfil_tab_style(ativa):
         "fontWeight": "700", "fontSize": "12px", "cursor": "pointer",
         "borderBottom": "3px solid #fff" if ativa else "3px solid transparent",
         "letterSpacing": ".5px",
+        "borderRadius": "8px 8px 0 0" if ativa else "0",
+        "boxShadow": "inset 0 -3px 0 rgba(255,255,255,.35), 0 6px 18px rgba(13,110,253,.22)" if ativa else "none",
+        "transform": "translateY(-1px)" if ativa else "none",
+        "transition": "all .18s ease",
     }
 
 
@@ -2223,7 +2228,7 @@ def _perfil_tab_financeiro(aluno_id):
                 id="perfil-fin-tipo",
                 options=[{"label": "Cobranças",    "value": "cobrancas"},
                          {"label": "Recebimentos", "value": "recebimentos"}],
-                value="cobrancas", inline=True, className="me-4",
+                value="cobrancas", inline=True, className="me-4 perfil-radio-items",
                 inputStyle={"marginRight": "4px"},
             ),
             html.Span(style={"borderLeft": "1px solid #ddd", "margin": "0 12px"}),
@@ -2232,7 +2237,7 @@ def _perfil_tab_financeiro(aluno_id):
                 options=[{"label": "Abertas",    "value": "abertas"},
                          {"label": "Canceladas", "value": "canceladas"},
                          {"label": "Todas",      "value": "todas"}],
-                value="abertas", inline=True,
+                value="abertas", inline=True, className="perfil-radio-items",
                 inputStyle={"marginRight": "4px"},
             ),
         ], className="d-flex align-items-center p-3 border-bottom",
@@ -2252,7 +2257,7 @@ def _perfil_tab_matriculas(aluno_id):
                          {"label": "Canceladas",         "value": "canceladas"},
                          {"label": "Finalizadas",        "value": "finalizadas"},
                          {"label": "Todas",              "value": "todas"}],
-                value="ativas", inline=True,
+                value="ativas", inline=True, className="perfil-radio-items",
                 inputStyle={"marginRight": "4px"},
             ),
             dbc.Button([html.I(className="bi bi-plus-circle me-1"), "Matrícula"],
