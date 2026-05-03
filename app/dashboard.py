@@ -2206,13 +2206,14 @@ def _perfil_tab_btn(tab_id, label, ativa):
 
 def _perfil_tab_style(ativa):
     return {
-        "background": "#1565c0" if ativa else COR_PRIMARIA,
-        "color": "white", "border": "none", "padding": "12px 22px",
+        "background": "#ffffff" if ativa else COR_PRIMARIA,
+        "color": COR_PRIMARIA if ativa else "#cbd5e1",
+        "border": "none", "padding": "12px 22px",
         "fontWeight": "700", "fontSize": "12px", "cursor": "pointer",
-        "borderBottom": "3px solid #fff" if ativa else "3px solid transparent",
+        "borderBottom": "3px solid #ffffff" if ativa else "3px solid transparent",
         "letterSpacing": ".5px",
         "borderRadius": "8px 8px 0 0" if ativa else "0",
-        "boxShadow": "inset 0 -3px 0 rgba(255,255,255,.35), 0 6px 18px rgba(13,110,253,.22)" if ativa else "none",
+        "boxShadow": "0 -1px 0 rgba(255,255,255,.12), 0 8px 18px rgba(15,23,42,.18)" if ativa else "none",
         "transform": "translateY(-1px)" if ativa else "none",
         "transition": "all .18s ease",
     }
