@@ -12,6 +12,8 @@ from app.database import get_conn
 
 logger = logging.getLogger(__name__)
 
+STATUS_MATRICULA_ABERTOS = ("ativo", "aguardando_pagamento", "inadimplente")
+
 
 # ── Alunos ─────────────────────────────────────────────────────────────────
 
@@ -143,6 +145,29 @@ def listar_matriculas_aluno(aluno_id: int):
     return [dict(r) for r in rows]
 
 
+def buscar_matricula_corrente(aluno_id: int):
+    conn = get_conn()
+    row = conn.execute("""
+        SELECT m.*, tp.nome AS plano, tp.meses, tp.valor,
+               mod.nome AS modalidade
+        FROM   matriculas m
+        JOIN   tipos_plano tp  ON tp.id  = m.tipo_plano_id
+        JOIN   modalidades mod ON mod.id = m.modalidade_id
+        WHERE  m.aluno_id = ?
+          AND  m.status IN (?, ?, ?)
+        ORDER  BY CASE m.status
+                    WHEN 'ativo' THEN 0
+                    WHEN 'aguardando_pagamento' THEN 1
+                    ELSE 2
+                  END,
+                  date(COALESCE(m.data_inicio, m.criado_em)) DESC,
+                  m.id DESC
+        LIMIT 1
+    """, (aluno_id, *STATUS_MATRICULA_ABERTOS)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def criar_matricula(aluno_id: int, tipo_plano_id: int, modalidade_id: int = None,
                     data_inicio: str = None, renovacao_auto: bool = True,
                     valor_override: float = None):
@@ -194,19 +219,33 @@ def criar_matricula(aluno_id: int, tipo_plano_id: int, modalidade_id: int = None
 
 
 def alterar_matricula_ativa(aluno_id: int, tipo_plano_id: int, modalidade_id: int,
-                            data_fim: str, valor_override: float = None):
+                            data_fim: str, data_inicio: str = None,
+                            renovacao_auto: bool = None,
+                            valor_override: float = None):
     """
-    Atualiza plano, modalidade e data de vencimento da matrícula ativa.
+    Atualiza a matrícula aberta mais recente do aluno.
     Ajusta o valor dos pagamentos pendentes quando o plano muda.
     """
     conn = get_conn()
     mat = conn.execute(
-        "SELECT * FROM matriculas WHERE aluno_id=? AND status='ativo' ORDER BY criado_em DESC LIMIT 1",
-        (aluno_id,)
+        """
+        SELECT * FROM matriculas
+        WHERE aluno_id=?
+          AND status IN (?, ?, ?)
+        ORDER BY CASE status
+                    WHEN 'ativo' THEN 0
+                    WHEN 'aguardando_pagamento' THEN 1
+                    ELSE 2
+                 END,
+                 date(COALESCE(data_inicio, criado_em)) DESC,
+                 id DESC
+        LIMIT 1
+        """,
+        (aluno_id, *STATUS_MATRICULA_ABERTOS)
     ).fetchone()
     if not mat:
         conn.close()
-        return False, "Nenhuma matrícula ativa encontrada."
+        return False, "Nenhuma matrícula aberta encontrada."
 
     plano = conn.execute("SELECT * FROM tipos_plano WHERE id=?", (tipo_plano_id,)).fetchone()
     if not plano:
@@ -216,17 +255,46 @@ def alterar_matricula_ativa(aluno_id: int, tipo_plano_id: int, modalidade_id: in
     valor = valor_override if valor_override is not None else plano["valor"]
     plano_mudou = mat["tipo_plano_id"] != tipo_plano_id
 
-    conn.execute("""
-        UPDATE matriculas
-        SET tipo_plano_id=?, modalidade_id=?, data_fim=?, valor_contratado=?
-        WHERE id=?
-    """, (tipo_plano_id, modalidade_id, data_fim, valor, mat["id"]))
+    campos = [
+        "tipo_plano_id=?",
+        "modalidade_id=?",
+        "data_fim=?",
+        "valor_contratado=?",
+    ]
+    params = [tipo_plano_id, modalidade_id, data_fim, valor]
+
+    if data_inicio:
+        campos.append("data_inicio=?")
+        params.append(data_inicio)
+    if renovacao_auto is not None:
+        campos.append("renovacao_auto=?")
+        params.append(1 if renovacao_auto else 0)
+
+    params.append(mat["id"])
+
+    conn.execute(
+        f"UPDATE matriculas SET {', '.join(campos)} WHERE id=?",
+        params,
+    )
 
     if plano_mudou:
         conn.execute("""
             UPDATE pagamentos SET valor=?
             WHERE matricula_id=? AND status IN ('pendente', 'vencido')
         """, (valor, mat["id"]))
+
+    if data_inicio and mat["status"] == "aguardando_pagamento":
+        periodo_ref = date.fromisoformat(data_inicio).strftime("%m/%Y")
+        conn.execute("""
+            UPDATE pagamentos
+            SET data_vencimento=?, periodo_ref=?
+            WHERE id = (
+                SELECT id FROM pagamentos
+                WHERE matricula_id=? AND status IN ('pendente', 'vencido')
+                ORDER BY id
+                LIMIT 1
+            )
+        """, (data_inicio, periodo_ref, mat["id"]))
 
     conn.commit()
     conn.close()

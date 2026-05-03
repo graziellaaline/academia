@@ -108,6 +108,7 @@ def _estado_modal_aluno(pathname):
         "modal":   None,
         "inicio":  hoje,
         "datafim": None,
+        "renovacao": True,
         "erro": "",
         "btn_inativar": None,
     }
@@ -122,8 +123,7 @@ def _estado_modal_aluno(pathname):
     a = alunos_mod.buscar_aluno(aluno_id)
     if not a:
         return estado
-    mats = alunos_mod.listar_matriculas_aluno(a["id"])
-    mat_ativa = next((m for m in mats if m["status"] == "ativo"), None)
+    mat_atual = alunos_mod.buscar_matricula_corrente(a["id"])
     estado.update({
         "is_open": True,
         "titulo": f"#{a['id']:04d} — {a['nome']}",
@@ -140,9 +140,11 @@ def _estado_modal_aluno(pathname):
         "cidade": a.get("cidade") or "",
         "uf": a.get("uf") or "",
         "obs": a["observacoes"] or "",
-        "plano":   mat_ativa["tipo_plano_id"] if mat_ativa else None,
-        "modal":   mat_ativa["modalidade_id"] if mat_ativa else None,
-        "datafim": mat_ativa["data_fim"]      if mat_ativa else None,
+        "plano":   mat_atual["tipo_plano_id"] if mat_atual else None,
+        "modal":   mat_atual["modalidade_id"] if mat_atual else None,
+        "inicio":  mat_atual["data_inicio"]   if mat_atual else hoje,
+        "datafim": mat_atual["data_fim"]      if mat_atual else None,
+        "renovacao": bool(mat_atual["renovacao_auto"]) if mat_atual else True,
         "btn_inativar": dbc.Button(
             [html.I(className="bi bi-person-x me-1"), "Inativar"],
             id="btn-abrir-inativar", n_clicks=0,
@@ -1060,13 +1062,17 @@ def _aba_alunos(pathname=None, search=None):
                 ], className="mb-2"),
                 dbc.Row([
                     dbc.Col([
-                        dbc.Label("Vencimento (data fim) — altere para mudar o plano ou prorrogar"),
+                        dbc.Label("Vencimento final da matrícula atual"),
                         dbc.Input(id="inp-mat-datafim", type="date",
                                   value=estado_modal["datafim"],
                                   placeholder="Deixe vazio para calcular automaticamente"),
                     ], md=6),
                 ], className="mb-2"),
-                dbc.Checkbox(id="inp-mat-renovacao", label="Renovação automática", value=True, className="mb-2"),
+                html.Small(
+                    "Ao salvar, o sistema atualiza a matrícula atual do aluno em vez de criar uma nova.",
+                    className="text-muted d-block mb-2",
+                ),
+                dbc.Checkbox(id="inp-mat-renovacao", label="Renovação automática", value=estado_modal["renovacao"], className="mb-2"),
                 html.Div(id="modal-aluno-erro", children=estado_modal["erro"], className="text-danger mt-2", style={"fontSize": "13px"}),
             ]),
             dbc.ModalFooter([
@@ -1305,13 +1311,14 @@ def controlar_modal_aluno(n_cancel, n_salvar, pathname, search,
         if aluno_id:
             alunos_mod.atualizar_aluno(aluno_id, dados)
             if plano_id and modal_id:
-                mats = alunos_mod.listar_matriculas_aluno(aluno_id)
-                mat_ativa = next((m for m in mats if m["status"] == "ativo"), None)
-                if mat_ativa:
-                    # Atualiza plano/vencimento da matrícula existente
-                    df = datafim or mat_ativa["data_fim"]
+                mat_atual = alunos_mod.buscar_matricula_corrente(aluno_id)
+                if mat_atual:
+                    df = datafim or mat_atual["data_fim"]
                     alunos_mod.alterar_matricula_ativa(
-                        aluno_id, int(plano_id), int(modal_id), df)
+                        aluno_id, int(plano_id), int(modal_id), df,
+                        data_inicio=inicio or mat_atual["data_inicio"],
+                        renovacao_auto=bool(renovacao),
+                    )
                 else:
                     alunos_mod.criar_matricula(aluno_id, int(plano_id), int(modal_id),
                                                data_inicio=inicio, renovacao_auto=bool(renovacao))
