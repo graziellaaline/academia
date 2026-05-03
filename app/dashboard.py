@@ -2429,16 +2429,19 @@ def _aba_perfil_aluno(aluno_id: int):
                     dbc.Col([
                         dbc.Label("Plano *"),
                         dbc.Select(id="inp-perfil-mat-plano",
-                                   options=[{"label": f"{p['nome']} — {_fmt_brl(p['valor'])}",
-                                             "value": p["id"]} for p in planos]),
-                    ], md=6),
-                    dbc.Col([
-                        dbc.Label("Modalidade *"),
-                        dbc.Select(id="inp-perfil-mat-modal",
-                                   options=[{"label": m["nome"], "value": m["id"]}
-                                            for m in modalids]),
-                    ], md=6),
+                                   options=[{
+                                       "label": (f"{p['nome']} — {_fmt_brl(p['valor'])}" +
+                                                 (f" ({p['modalidade_nome']})" if p.get("modalidade_nome") else "")),
+                                       "value": p["id"],
+                                   } for p in planos]),
+                    ], md=12),
                 ], className="mb-3"),
+                html.Div([
+                    dbc.Label("Modalidade *"),
+                    dbc.Select(id="inp-perfil-mat-modal",
+                               options=[{"label": m["nome"], "value": m["id"]}
+                                        for m in modalids]),
+                ], id="perfil-mat-modal-row", className="mb-3"),
                 dbc.Row([
                     dbc.Col([
                         dbc.Label("Data de início"),
@@ -2608,15 +2611,17 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
 # ── Perfil: tabela matrículas ─────────────────────────────────────────────
 
 @app.callback(
-    Output("perfil-mat-tabela", "children"),
-    Input("perfil-mat-filtro",  "value"),
+    Output("perfil-mat-tabela",   "children"),
+    Input("perfil-mat-filtro",    "value"),
+    Input("store-perfil-refresh", "data"),
     State("store-perfil-aluno-id","data"),
 )
-def atualizar_perfil_matriculas(filtro, aluno_id):
+def atualizar_perfil_matriculas(filtro, _refresh, aluno_id):
     if not aluno_id:
         raise PreventUpdate
     matriculas = alunos_mod.listar_matriculas_aluno(aluno_id)
     hoje = date.today()
+
     if filtro == "ativas":
         matriculas = [m for m in matriculas
                       if m["status"] in ("ativo","inadimplente","aguardando_pagamento")]
@@ -2625,51 +2630,87 @@ def atualizar_perfil_matriculas(filtro, aluno_id):
     elif filtro == "finalizadas":
         matriculas = [m for m in matriculas if m["status"] == "encerrado"]
 
+    # Carrega pagamentos pendentes do aluno de uma só vez
+    conn = get_conn()
+    pags_pendentes = conn.execute("""
+        SELECT matricula_id, MIN(id) AS pag_id
+        FROM pagamentos
+        WHERE aluno_id = ? AND status IN ('pendente','vencido')
+        GROUP BY matricula_id
+    """, (aluno_id,)).fetchall()
+    conn.close()
+    pag_map = {r["matricula_id"]: r["pag_id"] for r in pags_pendentes}
+
+    _th = {"fontSize": "11px", "color": "#888", "fontWeight": "700",
+           "textTransform": "uppercase", "padding": "10px 14px",
+           "borderBottom": "2px solid #e0e0e0"}
+
     linhas = []
     for m in matriculas:
         data_fim = date.fromisoformat(m["data_fim"]) if m.get("data_fim") else None
         vence_txt = f"Vence dia {data_fim.day}" if data_fim else "—"
         periodo = "Mensal" if m.get("meses") == 1 else (
             f"{m['meses']} meses" if m.get("meses") else "—")
-        icone = (html.I(className="bi bi-check-circle-fill me-2",
-                        style={"color": "#198754", "fontSize": "16px"})
-                 if m["status"] == "ativo" else
-                 html.I(className="bi bi-x-circle-fill me-2",
-                        style={"color": "#aaa", "fontSize": "16px"}))
+
+        # Ícone de status
+        if m["status"] == "ativo":
+            icone = html.I(className="bi bi-check-circle-fill",
+                           style={"color": "#198754", "fontSize": "16px"})
+        elif m["status"] == "aguardando_pagamento":
+            icone = html.I(className="bi bi-clock-fill",
+                           style={"color": "#fd7e14", "fontSize": "16px"})
+        else:
+            icone = html.I(className="bi bi-x-circle-fill",
+                           style={"color": "#aaa", "fontSize": "16px"})
+
+        # Botão de recebimento se houver pagamento pendente
+        pag_id = pag_map.get(m["id"])
+        btn_receber = None
+        if pag_id:
+            btn_receber = dbc.Button(
+                [html.I(className="bi bi-cash-coin me-1"), "Receber"],
+                id={"type": "btn-perfil-ver-pag", "index": pag_id},
+                size="sm",
+                style={"backgroundColor": "#198754", "border": "none",
+                       "color": "white", "fontSize": "11px",
+                       "padding": "3px 10px", "borderRadius": "4px"},
+            )
+
         linhas.append(html.Tr([
             html.Td([
                 html.Div(m["plano"], style={"color": "#0d6efd", "fontWeight": "600"}),
                 html.Small(m["modalidade"], style={"color": "#888"}),
-            ]),
+            ], style={"padding": "10px 14px"}),
             html.Td([
                 html.Div(_fmt_data(m["data_inicio"])),
                 html.Small(vence_txt, style={"color": "#888"}),
-            ]),
-            html.Td(periodo),
+            ], style={"padding": "10px 14px"}),
+            html.Td(periodo, style={"padding": "10px 14px"}),
             html.Td(_fmt_brl(m.get("valor_contratado") or m.get("valor")),
                     style={"textAlign": "right", "fontWeight": "700",
-                           "color": COR_PRIMARIA}),
-            html.Td([icone, _badge_status(m["status"])],
-                    style={"textAlign": "right", "whiteSpace": "nowrap"}),
-        ]))
+                           "color": COR_PRIMARIA, "padding": "10px 14px"}),
+            html.Td(
+                [icone, html.Span(" "), _badge_status(m["status"]),
+                 html.Span(" "), btn_receber] if btn_receber else
+                [icone, html.Span(" "), _badge_status(m["status"])],
+                style={"textAlign": "right", "whiteSpace": "nowrap",
+                       "padding": "8px 14px"},
+            ),
+        ], style={"borderBottom": "1px solid #f0f0f0"}))
 
     if not linhas:
         return html.Div("Nenhuma matrícula encontrada.", className="text-muted p-3")
-    return dbc.Table(
+
+    return html.Table(
         [html.Thead(html.Tr([
-            html.Th("PLANO E MODALIDADE",
-                    style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
-            html.Th("MATRÍCULA",
-                    style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
-            html.Th("PERIODICIDADE",
-                    style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
-            html.Th("VALOR",
-                    style={"fontSize": "11px", "color": "#888", "fontWeight": "700",
-                           "textAlign": "right"}),
-            html.Th("", style={"fontSize": "11px"}),
+            html.Th("Plano e Modalidade", style=_th),
+            html.Th("Matrícula", style=_th),
+            html.Th("Periodicidade", style=_th),
+            html.Th("Valor", style={**_th, "textAlign": "right"}),
+            html.Th("", style={**_th, "width": "180px"}),
         ])),
          html.Tbody(linhas)],
-        bordered=False, hover=True, size="sm", responsive=True,
+        style={"width": "100%", "borderCollapse": "collapse"},
     )
 
 
@@ -2814,6 +2855,26 @@ def controlar_modal_perfil_edit(edit_clicks, n_cancel, n_salvar,
         return no_update, no_update, no_update, no_update, no_update, msg, no_update
 
     raise PreventUpdate
+
+
+# ── Perfil: esconde Modalidade quando plano já tem uma ──────────────────────
+
+@app.callback(
+    Output("perfil-mat-modal-row", "style"),
+    Output("inp-perfil-mat-modal", "value"),
+    Input("inp-perfil-mat-plano",  "value"),
+)
+def toggle_perfil_modalidade_field(plano_id):
+    if not plano_id:
+        return {}, None
+    conn = get_conn()
+    p = conn.execute(
+        "SELECT modalidade_id FROM tipos_plano WHERE id=?", (int(plano_id),)
+    ).fetchone()
+    conn.close()
+    if p and p["modalidade_id"]:
+        return {"display": "none"}, str(p["modalidade_id"])
+    return {}, None
 
 
 # ── Perfil: modal nova matrícula ──────────────────────────────────────────
@@ -2979,8 +3040,10 @@ def _aba_planos():
             id={"type": "btn-edit-plano", "index": p["id"]},
             color="warning", size="sm", outline=True,
         )
+        mod_txt = p.get("modalidade_nome") or "—"
         return html.Tr([
             html.Td(p["nome"]),
+            html.Td(html.Small(mod_txt, style={"color": "#0d6efd" if mod_txt != "—" else "#aaa"})),
             html.Td(f"{p['meses']} mês(es)"),
             html.Td(_fmt_brl(p["valor"])),
             html.Td(_badge_status("ativo" if p["ativo"] else "cancelado")),
@@ -3027,8 +3090,11 @@ def _aba_planos():
                         ]),
                         dbc.CardBody(
                             dbc.Table([
-                                html.Thead(html.Tr([html.Th("Nome"), html.Th("Duração"),
-                                                    html.Th("Valor"), html.Th("Status"), html.Th("")])),
+                                html.Thead(html.Tr([
+                                    html.Th("Nome"), html.Th("Modalidade"),
+                                    html.Th("Duração"), html.Th("Valor"),
+                                    html.Th("Status"), html.Th(""),
+                                ])),
                                 html.Tbody([_row_plano(p) for p in planos]),
                             ], bordered=True, hover=True, size="sm", responsive=True)
                         ),
@@ -3062,17 +3128,26 @@ def _aba_planos():
             dbc.ModalBody([
                 dcc.Store(id="store-plano-id"),
                 dbc.Row([
-                    dbc.Col([dbc.Label("Nome do plano *"), dbc.Input(id="inp-plano-nome")], md=6),
+                    dbc.Col([dbc.Label("Nome do plano *"), dbc.Input(id="inp-plano-nome")], md=8),
                     dbc.Col([dbc.Label("Duração (meses) *"),
                              dbc.Select(id="inp-plano-meses",
                                         options=[{"label": "1 mês (Mensal)",       "value": "1"},
                                                  {"label": "3 meses (Trimestral)", "value": "3"},
                                                  {"label": "6 meses (Semestral)",  "value": "6"},
-                                                 {"label": "12 meses (Anual)",     "value": "12"}])], md=6),
+                                                 {"label": "12 meses (Anual)",     "value": "12"}])], md=4),
                 ], className="mb-3"),
                 dbc.Row([
                     dbc.Col([dbc.Label("Valor (R$) *"),
                              dbc.Input(id="inp-plano-valor", type="number", min=0, step=0.01)], md=6),
+                    dbc.Col([
+                        dbc.Label("Modalidade (embutida no plano)"),
+                        dbc.Select(id="inp-plano-modal-id",
+                                   options=[{"label": "— Nenhuma (genérico) —", "value": ""}] +
+                                           [{"label": m["nome"], "value": str(m["id"])}
+                                            for m in alunos_mod.listar_modalidades()]),
+                        html.Small("Se preenchida, o aluno não precisará escolher modalidade na matrícula.",
+                                   className="text-muted", style={"fontSize": "11px"}),
+                    ], md=6),
                 ], className="mb-3"),
                 # Opções de atualização — só aparecem ao editar (não ao criar)
                 html.Div(id="plano-opcoes-atualizacao", children=[
@@ -3137,6 +3212,7 @@ def _aba_planos():
     Output("modal-plano-erro",             "children"),
     Output("planos-conteudo",              "children", allow_duplicate=True),
     Output("plano-opcoes-atualizacao",     "style"),
+    Output("inp-plano-modal-id",           "value"),
     Input("btn-novo-plano",                            "n_clicks"),
     Input({"type": "btn-edit-plano",   "index": ALL},  "n_clicks"),
     Input({"type": "btn-toggle-plano", "index": ALL},  "n_clicks"),
@@ -3146,12 +3222,13 @@ def _aba_planos():
     State("inp-plano-nome",                "value"),
     State("inp-plano-meses",               "value"),
     State("inp-plano-valor",               "value"),
+    State("inp-plano-modal-id",            "value"),
     State("inp-plano-atualizar-vigentes",  "value"),
     State("inp-plano-atualizar-pendentes", "value"),
     prevent_initial_call=True,
 )
 def gerenciar_planos(n_novo, n_edit, n_toggle, n_cancel, n_salvar,
-                     plano_id, nome, meses, valor,
+                     plano_id, nome, meses, valor, modal_id,
                      atualizar_vigentes, atualizar_pendentes):
     ctx = callback_context
     valor_clicado = ctx.triggered[0].get("value") or 0
@@ -3164,17 +3241,18 @@ def gerenciar_planos(n_novo, n_edit, n_toggle, n_cancel, n_salvar,
     _visivel = {"display": "block"}
 
     if tid == "btn-novo-plano":
-        return True, "Novo Plano", None, "", "1", None, "", no_update, _oculto
+        return True, "Novo Plano", None, "", "1", None, "", no_update, _oculto, ""
 
     if isinstance(tid, dict) and tid.get("type") == "btn-edit-plano":
         from app.database import get_conn as _gc
         c = _gc()
-        p = c.execute("SELECT * FROM tipos_plano WHERE id=?", (tid["index"],)).fetchone()
+        p = dict(c.execute("SELECT * FROM tipos_plano WHERE id=?", (tid["index"],)).fetchone())
         c.close()
         if not p:
             raise PreventUpdate
         return (True, f"Editar — {p['nome']}", p["id"],
-                p["nome"], str(p["meses"]), p["valor"], "", no_update, _visivel)
+                p["nome"], str(p["meses"]), p["valor"], "", no_update, _visivel,
+                str(p.get("modalidade_id") or ""))
 
     if isinstance(tid, dict) and tid.get("type") == "btn-toggle-plano":
         from app.database import get_conn as _gc
@@ -3183,34 +3261,31 @@ def gerenciar_planos(n_novo, n_edit, n_toggle, n_cancel, n_salvar,
         novo = 0 if p["ativo"] else 1
         c.execute("UPDATE tipos_plano SET ativo=? WHERE id=?", (novo, tid["index"]))
         c.commit(); c.close()
-        return False, no_update, no_update, no_update, no_update, no_update, "", _rebuild_planos(), no_update
+        return False, no_update, no_update, no_update, no_update, no_update, "", _rebuild_planos(), no_update, no_update
 
     if tid == "btn-modal-plano-cancel":
-        return False, no_update, no_update, "", None, None, "", no_update, _oculto
+        return False, no_update, no_update, "", None, None, "", no_update, _oculto, ""
 
     if tid == "btn-modal-plano-salvar":
         if not nome or not meses or valor is None:
-            # 9 outputs: is_open, titulo, id, nome, meses, valor, erro, conteudo, style
             return no_update, no_update, no_update, no_update, no_update, no_update, \
-                   "Preencha todos os campos obrigatórios.", no_update, no_update
+                   "Preencha todos os campos obrigatórios.", no_update, no_update, no_update
         from app.database import get_conn as _gc
         try:
             c = _gc()
-            nome_fmt = nome.strip().upper()
+            nome_fmt = nome.strip()
+            mid = int(modal_id) if modal_id else None
             if plano_id:
-                # Atualiza nome, meses e valor numa única conexão
                 c.execute(
-                    "UPDATE tipos_plano SET nome=?, meses=?, valor=? WHERE id=?",
-                    (nome_fmt, int(meses), float(valor), int(plano_id))
+                    "UPDATE tipos_plano SET nome=?, meses=?, valor=?, modalidade_id=? WHERE id=?",
+                    (nome_fmt, int(meses), float(valor), mid, int(plano_id))
                 )
-                # Atualiza matrículas vigentes se solicitado
                 if atualizar_vigentes:
                     c.execute("""
                         UPDATE matriculas SET valor_contratado=?
                         WHERE tipo_plano_id=?
                           AND status IN ('ativo','aguardando_pagamento','inadimplente')
                     """, (float(valor), int(plano_id)))
-                # Atualiza cobranças pendentes se solicitado
                 if atualizar_pendentes:
                     c.execute("""
                         UPDATE pagamentos SET valor=?
@@ -3222,21 +3297,21 @@ def gerenciar_planos(n_novo, n_edit, n_toggle, n_cancel, n_salvar,
                     """, (float(valor), int(plano_id)))
             else:
                 c.execute(
-                    "INSERT INTO tipos_plano (nome, meses, valor) VALUES (?,?,?)",
-                    (nome_fmt, int(meses), float(valor))
+                    "INSERT INTO tipos_plano (nome, meses, valor, modalidade_id) VALUES (?,?,?,?)",
+                    (nome_fmt, int(meses), float(valor), mid)
                 )
             c.commit()
             c.close()
         except Exception as e:
             logger.error("Erro ao salvar plano: %s", e)
             return no_update, no_update, no_update, no_update, no_update, no_update, \
-                   f"Erro: {e}", no_update, no_update
+                   f"Erro: {e}", no_update, no_update, no_update
         try:
             novo_conteudo = _rebuild_planos()
         except Exception as e:
             logger.error("Erro ao reconstruir planos: %s", e)
             novo_conteudo = no_update
-        return False, no_update, no_update, "", "1", None, "", novo_conteudo, _oculto
+        return False, no_update, no_update, "", "1", None, "", novo_conteudo, _oculto, ""
 
     raise PreventUpdate
 
@@ -3247,8 +3322,10 @@ def _rebuild_planos():
     modalidades = alunos_mod.listar_modalidades(apenas_ativas=False)
 
     def _row_p(p):
+        mod_txt = p.get("modalidade_nome") or "—"
         return html.Tr([
             html.Td(p["nome"]),
+            html.Td(html.Small(mod_txt, style={"color": "#0d6efd" if mod_txt != "—" else "#aaa"})),
             html.Td(f"{p['meses']} mês(es)"),
             html.Td(_fmt_brl(p["valor"])),
             html.Td(_badge_status("ativo" if p["ativo"] else "cancelado")),
@@ -3297,8 +3374,11 @@ def _rebuild_planos():
                                style={"backgroundColor": COR_ACENTO, "borderColor": COR_ACENTO}),
                 ]),
                 dbc.CardBody(dbc.Table([
-                    html.Thead(html.Tr([html.Th("Nome"), html.Th("Duração"),
-                                        html.Th("Valor"), html.Th("Status"), html.Th("")])),
+                    html.Thead(html.Tr([
+                        html.Th("Nome"), html.Th("Modalidade"),
+                        html.Th("Duração"), html.Th("Valor"),
+                        html.Th("Status"), html.Th(""),
+                    ])),
                     html.Tbody([_row_p(p) for p in planos]),
                 ], bordered=True, hover=True, size="sm", responsive=True)),
             ], className="shadow-sm"),

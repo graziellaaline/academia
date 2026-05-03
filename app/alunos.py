@@ -143,13 +143,13 @@ def listar_matriculas_aluno(aluno_id: int):
     return [dict(r) for r in rows]
 
 
-def criar_matricula(aluno_id: int, tipo_plano_id: int, modalidade_id: int,
+def criar_matricula(aluno_id: int, tipo_plano_id: int, modalidade_id: int = None,
                     data_inicio: str = None, renovacao_auto: bool = True,
                     valor_override: float = None):
     """
     Cria matrícula e gera o primeiro pagamento.
-    valor_override: se informado, usa esse valor em vez do preço atual do plano
-                    (útil para negociações individuais).
+    modalidade_id: se None, usa a modalidade embutida no plano.
+    valor_override: se informado, usa esse valor em vez do preço atual do plano.
     """
     hoje = date.today()
     inicio = date.fromisoformat(data_inicio) if data_inicio else hoje
@@ -159,6 +159,15 @@ def criar_matricula(aluno_id: int, tipo_plano_id: int, modalidade_id: int,
     if not plano:
         conn.close()
         return None, "Plano não encontrado."
+
+    # Prioridade: modalidade_id passado > modalidade embutida no plano > primeiro ativo
+    effective_mod = modalidade_id or dict(plano).get("modalidade_id")
+    if not effective_mod:
+        first_mod = conn.execute(
+            "SELECT id FROM modalidades WHERE ativo=1 ORDER BY id LIMIT 1"
+        ).fetchone()
+        effective_mod = first_mod["id"] if first_mod else 1
+    modalidade_id = effective_mod
 
     valor = valor_override if valor_override is not None else plano["valor"]
     fim   = inicio + relativedelta(months=plano["meses"]) - timedelta(days=1)
@@ -324,10 +333,14 @@ def kpis():
 
 def listar_planos(apenas_ativos=True):
     conn = get_conn()
-    sql = "SELECT * FROM tipos_plano"
+    sql = """
+        SELECT tp.*, mod.nome AS modalidade_nome
+        FROM tipos_plano tp
+        LEFT JOIN modalidades mod ON mod.id = tp.modalidade_id
+    """
     if apenas_ativos:
-        sql += " WHERE ativo=1"
-    sql += " ORDER BY meses"
+        sql += " WHERE tp.ativo=1"
+    sql += " ORDER BY tp.meses, tp.nome"
     rows = conn.execute(sql).fetchall()
     conn.close()
     return [dict(r) for r in rows]

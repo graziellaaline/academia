@@ -170,6 +170,12 @@ def migrar():
         c.execute("ALTER TABLE pagamentos ADD COLUMN desconto REAL DEFAULT 0")
         logger.info("Migração: coluna desconto adicionada em pagamentos.")
 
+    # V1.4.03 — modalidade_id em tipos_plano
+    cols_tp = [r[1] for r in c.execute("PRAGMA table_info(tipos_plano)").fetchall()]
+    if "modalidade_id" not in cols_tp:
+        c.execute("ALTER TABLE tipos_plano ADD COLUMN modalidade_id INTEGER REFERENCES modalidades(id)")
+        logger.info("Migração: coluna modalidade_id adicionada em tipos_plano.")
+
     conn.commit()
     conn.close()
 
