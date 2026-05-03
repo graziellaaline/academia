@@ -7,6 +7,7 @@ import logging
 import re
 from datetime import date, timedelta
 from urllib.parse import parse_qs, urlencode
+from dateutil.relativedelta import relativedelta
 
 import dash
 import dash_bootstrap_components as dbc
@@ -2078,7 +2079,8 @@ def controlar_modal_pag(baixar_clicks, ver_clicks, n_cancel, n_confirmar,
         pid = tid["index"]
         conn = get_conn()
         p = conn.execute("""
-            SELECT p.*, a.nome AS aluno_nome, tp.nome AS plano, mod.nome AS modalidade
+            SELECT p.*, a.nome AS aluno_nome, tp.nome AS plano, mod.nome AS modalidade,
+                   tp.nome AS plano_nome, mod.nome AS modalidade_nome, tp.meses AS plano_meses
             FROM pagamentos p
             JOIN alunos a ON a.id = p.aluno_id
             JOIN matriculas m ON m.id = p.matricula_id
@@ -2096,8 +2098,8 @@ def controlar_modal_pag(baixar_clicks, ver_clicks, n_cancel, n_confirmar,
 
         info_items = [
             html.Strong(p["aluno_nome"]), html.Br(),
-            html.Span(f"{p['plano']} / {p['modalidade']}", style={"color": "#555"}),
-            "  |  Venc.: ", _fmt_data(p["data_vencimento"]), html.Br(),
+            html.Span(_referencia_pagamento(p), style={"color": "#555"}), html.Br(),
+            "Venc.: ", _fmt_data(p["data_vencimento"]), html.Br(),
             "Valor: ", html.Strong(_fmt_brl(p["valor"])),
         ]
         if desconto:
@@ -2636,6 +2638,21 @@ def _pagamentos_marcados(ids_componentes, valores_componentes):
     return selecionados
 
 
+def _periodo_pagamento(data_base: str, meses: int):
+    if not data_base:
+        return "—"
+    inicio = date.fromisoformat(data_base)
+    fim = inicio + relativedelta(months=meses or 1) - timedelta(days=1)
+    return f"{_fmt_data(inicio.isoformat())} a {_fmt_data(fim.isoformat())}"
+
+
+def _referencia_pagamento(pagamento: dict):
+    periodo = _periodo_pagamento(pagamento.get("data_vencimento"), pagamento.get("plano_meses") or 1)
+    modalidade = pagamento.get("modalidade_nome") or "—"
+    plano = pagamento.get("plano_nome") or "—"
+    return f"Mensalidade {periodo} - {modalidade} {plano}"
+
+
 # ── Perfil: tabela financeiro ─────────────────────────────────────────────
 
 @app.callback(
@@ -2663,28 +2680,30 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
     ph = ",".join("?" * len(status_filter))
     rows_db = conn.execute(f"""
         SELECT p.*, tp.nome AS plano_nome, mod.nome AS modalidade_nome,
-               m.data_inicio AS mat_inicio, m.data_fim AS mat_fim
+               tp.meses AS plano_meses
         FROM pagamentos p
         JOIN matriculas m ON m.id = p.matricula_id
         JOIN tipos_plano tp ON tp.id = m.tipo_plano_id
         JOIN modalidades mod ON mod.id = m.modalidade_id
         WHERE p.aluno_id = ? AND p.status IN ({ph})
-        ORDER BY p.data_vencimento DESC
+        ORDER BY CASE WHEN p.status='pago' THEN COALESCE(p.data_pagamento, p.data_vencimento)
+                      ELSE p.data_vencimento END DESC,
+                 p.id DESC
     """, (aluno_id,) + status_filter).fetchall()
     conn.close()
 
-    rows_db = [dict(r) for r in rows_db]
+    rows_db = [dict(r) for r in rows_db][:5]
     total = sum(float(r["valor"]) - float(r.get("desconto") or 0)
                 for r in rows_db if r["status"] not in ("cancelado",))
+    titulo_data = "RECEBIDO EM" if tipo == "recebimentos" else "VENCIMENTO"
     linhas = []
     for p in rows_db:
         desconto = float(p.get("desconto") or 0)
         valor_liq = float(p["valor"]) - desconto
         is_venc = (p["status"] == "vencido" or
                    (p["status"] == "pendente" and (p["data_vencimento"] or "") < hoje))
-        periodo_ref = (f"{_fmt_data(p.get('mat_inicio'))} a {_fmt_data(p.get('mat_fim'))}"
-                       if p.get("mat_inicio") else _fmt_data(p["data_vencimento"]))
-        referencia = f"Mensalidade {periodo_ref} — {p['plano_nome']}"
+        referencia = _referencia_pagamento(p)
+        data_principal = p["data_pagamento"] if tipo == "recebimentos" else p["data_vencimento"]
         btn_ver = dbc.Button(
             html.I(className="bi bi-cash-coin"),
             id={"type": "btn-perfil-ver-pag", "index": p["id"]},
@@ -2710,10 +2729,13 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
             )
         linhas.append(html.Tr([
             html.Td(chk, style={"textAlign": "center", "width": "42px"}),
-            html.Td(_fmt_data(p["data_vencimento"]),
-                   style={"color": "#dc3545" if is_venc else "#333",
+            html.Td(_fmt_data(data_principal),
+                   style={"color": "#dc3545" if (tipo == 'cobrancas' and is_venc) else "#333",
                           "fontWeight": "600", "whiteSpace": "nowrap"}),
-            html.Td(referencia, style={"color": "#0d6efd"}),
+            html.Td([
+                html.Div(referencia, style={"color": "#0d6efd"}),
+                *( [html.Small(f"Pago em {_fmt_data(p['data_pagamento'])}", style={"color": "#198754"})] if tipo == "recebimentos" and p.get("data_pagamento") else [] ),
+            ]),
             html.Td([
                 html.Span(_fmt_brl(valor_liq),
                          style={"fontWeight": "700", "color": COR_PRIMARIA}),
@@ -2733,7 +2755,7 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
         tabela = dbc.Table(
             [html.Thead(html.Tr([
                 html.Th("", style={"width": "42px"}),
-                html.Th("VENCIMENTO",
+                html.Th(titulo_data,
                         style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
                 html.Th("REFERÊNCIA",
                         style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
@@ -2972,7 +2994,8 @@ def controlar_modal_perfil_pag(ver_clicks, n_lote, n_cancel, n_confirmar,
         conn = get_conn()
         placeholders = ",".join("?" * len(selecionados))
         rows = conn.execute(f"""
-            SELECT p.*, a.nome AS aluno_nome, tp.nome AS plano, mod.nome AS modalidade
+            SELECT p.*, a.nome AS aluno_nome, tp.nome AS plano, mod.nome AS modalidade,
+                   tp.nome AS plano_nome, mod.nome AS modalidade_nome, tp.meses AS plano_meses
             FROM pagamentos p
             JOIN alunos a ON a.id = p.aluno_id
             JOIN matriculas m ON m.id = p.matricula_id
@@ -2991,7 +3014,7 @@ def controlar_modal_perfil_pag(ver_clicks, n_lote, n_cancel, n_confirmar,
             html.Strong(rows[0]["aluno_nome"]), html.Br(),
             html.Span(f"{len(rows)} mensalidade(s) selecionada(s)"), html.Br(),
             html.Ul([
-                html.Li(f"{_fmt_data(r['data_vencimento'])} — {r['plano']} / {r['modalidade']} — {_fmt_brl(float(r['valor']) - float(r.get('desconto') or 0))}")
+                html.Li(f"{_referencia_pagamento(r)} — {_fmt_brl(float(r['valor']) - float(r.get('desconto') or 0))}")
                 for r in rows
             ], className="mb-2 mt-2"),
             html.Span("Total: "), html.Strong(_fmt_brl(total)),
