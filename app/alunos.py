@@ -340,7 +340,7 @@ def listar_planos(apenas_ativos=True):
     """
     if apenas_ativos:
         sql += " WHERE tp.ativo=1"
-    sql += " ORDER BY tp.meses, tp.nome"
+    sql += " ORDER BY tp.nome COLLATE NOCASE"
     rows = conn.execute(sql).fetchall()
     conn.close()
     return [dict(r) for r in rows]
