@@ -1713,11 +1713,12 @@ def _aba_pagamentos():
                         dbc.RadioItems(
                             id="filtro-pag-periodo",
                             options=[
+                                {"label": "Todos",         "value": ""},
                                 {"label": "Este Mês",      "value": "mes"},
                                 {"label": "Hoje",          "value": "hoje"},
                                 {"label": "Outro Período", "value": "custom"},
                             ],
-                            value="mes", className="mb-2",
+                            value="", className="mb-2",
                             inputStyle={"marginRight": "6px"},
                         ),
                         dbc.Row([
@@ -1840,7 +1841,7 @@ def toggle_datas_custom(periodo):
 def limpar_filtros_pag(n):
     if not n:
         raise PreventUpdate
-    return "aberto", "mes", "", None, date.today().isoformat()
+    return "aberto", "", "", None, None
 
 
 @app.callback(
@@ -1866,8 +1867,12 @@ def atualizar_tabela_pag(status, periodo, dt_ini, dt_fim, busca, _filtrar, tab, 
     if periodo == "hoje":
         dt_ini = dt_fim = hoje.isoformat()
     elif periodo == "mes":
+        import calendar as _cal
         dt_ini = hoje.replace(day=1).isoformat()
-        dt_fim = hoje.isoformat()
+        ultimo = _cal.monthrange(hoje.year, hoje.month)[1]
+        dt_fim = hoje.replace(day=ultimo).isoformat()
+    elif periodo == "":
+        dt_ini = dt_fim = None   # sem filtro de data
     # custom: usa dt_ini e dt_fim dos inputs
 
     # Status filter
