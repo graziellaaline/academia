@@ -1647,35 +1647,75 @@ def _aba_pagamentos():
         dbc.Row([
             # ── Lista principal ──────────────────────────────────────────
             dbc.Col([
+                # Cabeçalho estilo referência
                 html.Div([
-                    html.H5([html.I(className="bi bi-cash-stack me-2"), "Contas a Receber"],
-                            className="fw-bold mb-0", style={"color": COR_PRIMARIA}),
+                    html.Div(
+                        "Cobranças",
+                        style={"background": COR_PRIMARIA, "color": "white",
+                               "padding": "10px 18px", "fontWeight": "700",
+                               "fontSize": "14px", "letterSpacing": ".5px"},
+                    ),
                     html.Div([
-                        dbc.Input(id="filtro-pag-busca", placeholder="Buscar aluno...",
-                                  size="sm", style={"width": "200px"}),
-                        dbc.Button([html.I(className="bi bi-download me-1"), "Excel"],
-                                   id="btn-export-pagamentos", color="secondary",
-                                   size="sm", outline=True, className="ms-2"),
-                    ], className="d-flex align-items-center"),
-                ], className="d-flex justify-content-between align-items-center mb-3"),
-
-                html.Div(id="tabela-pagamentos"),
+                        dbc.Input(
+                            id="filtro-pag-busca",
+                            placeholder="🔍  Filtrar por aluno...",
+                            size="sm", debounce=False,
+                            style={"border": "none", "background": "transparent",
+                                   "maxWidth": "260px", "outline": "none",
+                                   "boxShadow": "none"},
+                        ),
+                        html.Div([
+                            dbc.Button(
+                                html.I(className="bi bi-download"),
+                                id="btn-export-pagamentos",
+                                color="secondary", size="sm", outline=True,
+                                title="Exportar Excel", className="ms-1",
+                            ),
+                        ], className="ms-auto d-flex"),
+                    ], className="d-flex align-items-center px-3 py-2 border-bottom bg-white"),
+                    html.Div(id="tabela-pagamentos"),
+                ], style={"border": "1px solid #ddd", "borderRadius": "8px",
+                          "overflow": "hidden", "background": "white"}),
             ], md=9),
 
             # ── Painel lateral de filtros ────────────────────────────────
             dbc.Col([
-                dbc.Card([
-                    dbc.CardHeader(html.Strong("Filtro", style={"color": COR_PRIMARIA})),
-                    dbc.CardBody([
-                        # Período rápido
-                        html.Div("Período", className="fw-semibold mb-2",
-                                 style={"fontSize": "12px", "color": "#888"}),
+                html.Div([
+                    html.Div(
+                        html.Strong("Filtro Avançado",
+                                    style={"color": "white", "fontSize": "13px"}),
+                        style={"background": "#1565c0", "padding": "12px 16px",
+                               "borderRadius": "8px 8px 0 0"},
+                    ),
+                    html.Div([
+                        # Status
+                        html.Div("Status", style={"fontSize": "11px", "color": "#888",
+                                                   "fontWeight": "700",
+                                                   "textTransform": "uppercase",
+                                                   "marginBottom": "6px"}),
+                        dbc.RadioItems(
+                            id="filtro-pag-status",
+                            options=[
+                                {"label": "Todas",   "value": "aberto"},
+                                {"label": "Vencidas","value": "vencido"},
+                                {"label": "Futuras", "value": "futuras"},
+                                {"label": "Pagas",   "value": "pago"},
+                            ],
+                            value="aberto", className="mb-3",
+                            inputStyle={"marginRight": "6px"},
+                        ),
+                        html.Hr(className="my-2"),
+                        # Período
+                        html.Div("Período", style={"fontSize": "11px", "color": "#888",
+                                                    "fontWeight": "700",
+                                                    "textTransform": "uppercase",
+                                                    "marginBottom": "6px"}),
                         dbc.RadioItems(
                             id="filtro-pag-periodo",
                             options=[
-                                {"label": "Este mês",     "value": "mes"},
-                                {"label": "Hoje",         "value": "hoje"},
-                                {"label": "Outro período","value": "custom"},
+                                {"label": "Este Mês",      "value": "mes"},
+                                {"label": "Hoje",          "value": "hoje"},
+                                {"label": "Outro Período", "value": "custom"},
                             ],
                             value="mes", className="mb-2",
                             inputStyle={"marginRight": "6px"},
@@ -1687,28 +1727,24 @@ def _aba_pagamentos():
                                               value=hoje.isoformat(), size="sm"), md=6),
                         ], id="filtro-pag-datas", className="mb-3",
                            style={"display": "none"}),
-
+                        dbc.Row([
+                            dbc.Col(dbc.Button(
+                                [html.I(className="bi bi-check-lg me-1"), "Filtrar"],
+                                id="btn-pag-filtrar", color="success", size="sm",
+                                className="w-100",
+                            ), md=6),
+                            dbc.Col(dbc.Button(
+                                [html.I(className="bi bi-x-lg me-1"), "Limpar"],
+                                id="btn-pag-limpar", color="danger", size="sm",
+                                outline=True, className="w-100",
+                            ), md=6),
+                        ], className="mb-3 g-1"),
                         html.Hr(className="my-2"),
-                        # Status
-                        html.Div("Status", className="fw-semibold mb-2",
-                                 style={"fontSize": "12px", "color": "#888"}),
-                        dbc.RadioItems(
-                            id="filtro-pag-status",
-                            options=[
-                                {"label": "Pendentes + Vencidos", "value": "aberto"},
-                                {"label": "Vencidos",             "value": "vencido"},
-                                {"label": "Pagos",                "value": "pago"},
-                                {"label": "Todos",                "value": ""},
-                            ],
-                            value="aberto", className="mb-3",
-                            inputStyle={"marginRight": "6px"},
-                        ),
-
-                        html.Hr(className="my-2"),
-                        # Totalizadores
                         html.Div(id="totais-pag"),
-                    ]),
-                ], style={"position": "sticky", "top": "70px"}),
+                    ], style={"padding": "14px 16px"}),
+                ], style={"border": "1px solid #ddd", "borderRadius": "8px",
+                          "overflow": "hidden", "position": "sticky", "top": "70px",
+                          "background": "white"}),
             ], md=3),
         ]),
 
@@ -1793,6 +1829,21 @@ def toggle_datas_custom(periodo):
 
 
 @app.callback(
+    Output("filtro-pag-status",  "value"),
+    Output("filtro-pag-periodo", "value"),
+    Output("filtro-pag-busca",   "value"),
+    Output("filtro-pag-ini",     "value"),
+    Output("filtro-pag-fim",     "value"),
+    Input("btn-pag-limpar",      "n_clicks"),
+    prevent_initial_call=True,
+)
+def limpar_filtros_pag(n):
+    if not n:
+        raise PreventUpdate
+    return "aberto", "mes", "", None, date.today().isoformat()
+
+
+@app.callback(
     Output("tabela-pagamentos", "children"),
     Output("totais-pag",        "children"),
     Input("filtro-pag-status",  "value"),
@@ -1800,10 +1851,11 @@ def toggle_datas_custom(periodo):
     Input("filtro-pag-ini",     "value"),
     Input("filtro-pag-fim",     "value"),
     Input("filtro-pag-busca",   "value"),
+    Input("btn-pag-filtrar",    "n_clicks"),
     Input("store-tab-ativa",    "data"),
     Input("store-refresh-pag",  "data"),
 )
-def atualizar_tabela_pag(status, periodo, dt_ini, dt_fim, busca, tab, _refresh):
+def atualizar_tabela_pag(status, periodo, dt_ini, dt_fim, busca, _filtrar, tab, _refresh):
     if tab != "pagamentos":
         raise PreventUpdate
 
@@ -1819,8 +1871,12 @@ def atualizar_tabela_pag(status, periodo, dt_ini, dt_fim, busca, tab, _refresh):
     # custom: usa dt_ini e dt_fim dos inputs
 
     # Status filter
+    futuras_only = False
     if status == "aberto":
         status_list = ("pendente", "vencido")
+    elif status == "futuras":
+        status_list = ("pendente",)
+        futuras_only = True
     elif status:
         status_list = (status,)
     else:
@@ -1847,6 +1903,8 @@ def atualizar_tabela_pag(status, periodo, dt_ini, dt_fim, busca, tab, _refresh):
     if dt_fim:
         sql += " AND p.data_vencimento <= ?"
         params.append(dt_fim)
+    if futuras_only:
+        sql += " AND p.data_vencimento > date('now')"
     sql += " ORDER BY p.data_vencimento ASC"
     rows_db = conn.execute(sql, params).fetchall()
 
@@ -1895,11 +1953,15 @@ def atualizar_tabela_pag(status, periodo, dt_ini, dt_fim, busca, tab, _refresh):
     if not lista:
         return dbc.Alert("Nenhum registro encontrado.", color="light"), totais
 
+    _th = {"fontSize": "11px", "color": "#888", "fontWeight": "700",
+           "textTransform": "uppercase", "padding": "10px 14px",
+           "borderBottom": "2px solid #e0e0e0", "background": "#fafafa"}
+
     rows = []
     for p in lista:
         is_vencido = (p["status"] == "vencido" or
-                      (p["status"] == "pendente" and p["data_vencimento"] < hoje.isoformat()))
-        cor_linha = {"backgroundColor": "#fff5f5"} if is_vencido else {}
+                      (p["status"] == "pendente" and
+                       p["data_vencimento"] < hoje.isoformat()))
         desconto = float(p.get("desconto") or 0)
         valor_liq = float(p["valor"]) - desconto
 
@@ -1907,57 +1969,53 @@ def atualizar_tabela_pag(status, periodo, dt_ini, dt_fim, busca, tab, _refresh):
             html.I(className="bi bi-cash-coin"),
             id={"type": "btn-ver-pag", "index": p["id"]},
             size="sm", title="Ver / Receber",
-            style={"backgroundColor": "#198754", "borderColor": "#198754",
-                   "color": "white", "padding": "2px 7px", "marginRight": "4px"},
+            style={"background": "#198754", "border": "none",
+                   "color": "white", "padding": "3px 8px", "marginRight": "4px",
+                   "borderRadius": "4px"},
         )
         btn_edit = dbc.Button(
             html.I(className="bi bi-pencil"),
             id={"type": "btn-edit-pag", "index": p["id"]},
             size="sm", title="Editar",
-            style={"backgroundColor": "#fd7e14", "borderColor": "#fd7e14",
-                   "color": "white", "padding": "2px 7px"},
+            style={"background": "#fd7e14", "border": "none",
+                   "color": "white", "padding": "3px 8px", "borderRadius": "4px"},
         )
 
         rows.append(html.Tr([
-            html.Td([
-                html.Div(_fmt_data(p["data_vencimento"]),
-                         style={"fontWeight": "600", "whiteSpace": "nowrap",
-                                "color": "#dc3545" if is_vencido else "#333"}),
-                html.Div(_badge_status(p["status"]), style={"marginTop": "3px"}),
-            ]),
-            html.Td([
-                html.Div(f"{p['aluno_nome']} ({p['aluno_id']})",
-                         style={"fontWeight": "500", "color": "#0d6efd"}),
-                html.Div(f"{p['plano']} / {p['modalidade']}",
-                         style={"fontSize": "11px", "color": "#888"}),
-            ]),
-            html.Td([
-                html.Span(_fmt_brl(valor_liq),
-                         style={"fontWeight": "700", "color": COR_PRIMARIA}),
-                *([html.Br(),
-                   html.Small(_fmt_brl(p["valor"]),
-                              style={"textDecoration": "line-through", "color": "#aaa",
-                                     "fontSize": "10px"})]
-                  if desconto > 0 else []),
-            ], style={"textAlign": "right"}),
-            html.Td([btn_ver, btn_edit],
-                    style={"textAlign": "right", "whiteSpace": "nowrap"}),
-        ], style=cor_linha))
+            html.Td(
+                _fmt_data(p["data_vencimento"]),
+                style={"whiteSpace": "nowrap", "padding": "10px 14px",
+                       "color": "#dc3545" if is_vencido else "#555",
+                       "fontWeight": "500", "width": "115px"},
+            ),
+            html.Td(
+                f"{p['aluno_nome']} ({p['aluno_id']})",
+                style={"color": "#0d6efd", "fontWeight": "500",
+                       "padding": "10px 14px"},
+            ),
+            html.Td(
+                _fmt_brl(valor_liq),
+                style={"textAlign": "right", "fontWeight": "700",
+                       "color": "#0d6efd", "whiteSpace": "nowrap",
+                       "padding": "10px 14px", "width": "110px"},
+            ),
+            html.Td(
+                [btn_ver, btn_edit],
+                style={"textAlign": "right", "whiteSpace": "nowrap",
+                       "padding": "8px 14px", "width": "90px"},
+            ),
+        ], style={"borderBottom": "1px solid #f0f0f0",
+                  "backgroundColor": "#fff8f8" if is_vencido else "white"}))
 
-    tabela = dbc.Table(
-        [html.Thead(html.Tr([
-            html.Th("VENCIMENTO",
-                    style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
-            html.Th("ALUNO OU CONSUMIDOR",
-                    style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
-            html.Th("VALOR",
-                    style={"fontSize": "11px", "color": "#888", "fontWeight": "700",
-                           "textAlign": "right"}),
-            html.Th("", style={"fontSize": "11px"}),
-        ])),
-         html.Tbody(rows)],
-        bordered=False, hover=True, size="sm", responsive=True,
-        style={"borderTop": f"3px solid {COR_ACENTO}"}
+    cabecalho = html.Tr([
+        html.Th("Vencimento", style=_th),
+        html.Th("Aluno ou Consumidor", style=_th),
+        html.Th("Valor", style={**_th, "textAlign": "right"}),
+        html.Th("", style={**_th, "width": "90px"}),
+    ])
+    tabela = html.Table(
+        [html.Thead(cabecalho), html.Tbody(rows)],
+        style={"width": "100%", "borderCollapse": "collapse"},
     )
     return tabela, totais
 
@@ -2475,11 +2533,11 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
     """, (aluno_id,) + status_filter).fetchall()
     conn.close()
 
+    rows_db = [dict(r) for r in rows_db]
     total = sum(float(r["valor"]) - float(r.get("desconto") or 0)
                 for r in rows_db if r["status"] not in ("cancelado",))
     linhas = []
     for p in rows_db:
-        p = dict(p)
         desconto = float(p.get("desconto") or 0)
         valor_liq = float(p["valor"]) - desconto
         is_venc = (p["status"] == "vencido" or
