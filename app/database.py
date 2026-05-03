@@ -176,6 +176,13 @@ def migrar():
         c.execute("ALTER TABLE tipos_plano ADD COLUMN modalidade_id INTEGER REFERENCES modalidades(id)")
         logger.info("Migração: coluna modalidade_id adicionada em tipos_plano.")
 
+    # V1.4.08 — rastreio de encerramento/troca de matrícula
+    cols_mat = [r[1] for r in c.execute("PRAGMA table_info(matriculas)").fetchall()]
+    for col, tipo in [("data_encerramento", "TEXT"), ("motivo_encerramento", "TEXT")]:
+        if col not in cols_mat:
+            c.execute(f"ALTER TABLE matriculas ADD COLUMN {col} {tipo}")
+            logger.info("Migração: coluna %s adicionada em matriculas.", col)
+
     conn.commit()
     conn.close()
 

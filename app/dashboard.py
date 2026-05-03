@@ -42,6 +42,12 @@ COR_ACENTO    = "#e63946"
 COR_FUNDO     = "#f4f6fb"
 COR_CARD      = "#ffffff"
 
+MOTIVO_MATRICULA_LABELS = {
+    "financeiro": "Financeiro",
+    "mudanca_de_plano": "Mudança de plano",
+    "cancelamento_de_plano": "Cancelamento de plano",
+}
+
 TAB_ITENS = [
     ("bi-speedometer2", "dashboard", "Dashboard", "/"),
     ("bi-people-fill", "alunos", "Alunos", "/alunos"),
@@ -2193,14 +2199,18 @@ def _perfil_tab_btn(tab_id, label, ativa):
         label,
         id={"type": "btn-perfil-tab", "index": tab_id},
         n_clicks=0,
-        style={
-            "background": "#1565c0" if ativa else COR_PRIMARIA,
-            "color": "white", "border": "none", "padding": "12px 22px",
-            "fontWeight": "700", "fontSize": "12px", "cursor": "pointer",
-            "borderBottom": "3px solid #fff" if ativa else "3px solid transparent",
-            "letterSpacing": ".5px",
-        },
+        style=_perfil_tab_style(ativa),
     )
+
+
+def _perfil_tab_style(ativa):
+    return {
+        "background": "#1565c0" if ativa else COR_PRIMARIA,
+        "color": "white", "border": "none", "padding": "12px 22px",
+        "fontWeight": "700", "fontSize": "12px", "cursor": "pointer",
+        "borderBottom": "3px solid #fff" if ativa else "3px solid transparent",
+        "letterSpacing": ".5px",
+    }
 
 
 def _perfil_tab_financeiro(aluno_id):
@@ -2347,6 +2357,7 @@ def _aba_perfil_aluno(aluno_id: int):
         dcc.Store(id="store-perfil-refresh",  data=0),
         dcc.Store(id="store-perfil-pag-id"),
         dcc.Store(id="store-perfil-edit-id"),
+        dcc.Store(id="store-perfil-acao-mat"),
         # Tab buttons
         html.Div([
             _perfil_tab_btn("financeiro", "FINANCEIRO", True),
@@ -2473,6 +2484,56 @@ def _aba_perfil_aluno(aluno_id: int):
                            id="btn-perfil-mat-confirmar", color="success"),
             ]),
         ], id="modal-perfil-nova-mat", is_open=False),
+        dbc.Modal([
+            dbc.ModalHeader(dbc.ModalTitle(id="modal-perfil-acao-titulo")),
+            dbc.ModalBody([
+                dbc.Alert(id="modal-perfil-acao-info", color="info", className="mb-3"),
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Label("Motivo *"),
+                        dbc.Select(
+                            id="inp-perfil-acao-motivo",
+                            options=[
+                                {"label": MOTIVO_MATRICULA_LABELS[m], "value": m}
+                                for m in alunos_mod.MOTIVOS_MATRICULA
+                            ],
+                            value="mudanca_de_plano",
+                        ),
+                    ], md=6),
+                    dbc.Col([
+                        dbc.Label("Data da mudança *"),
+                        dbc.Input(id="inp-perfil-acao-data", type="date", value=hoje.isoformat()),
+                    ], md=6),
+                ], className="mb-3"),
+                html.Div(id="perfil-acao-novo-plano-wrap", children=[
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Label("Novo plano *"),
+                            dbc.Select(id="inp-perfil-acao-plano",
+                                       options=[{
+                                           "label": (f"{p['nome']} — {_fmt_brl(p['valor'])}" +
+                                                     (f" ({p['modalidade_nome']})" if p.get("modalidade_nome") else "")),
+                                           "value": p["id"],
+                                       } for p in planos]),
+                        ], md=12),
+                    ], className="mb-3"),
+                    html.Div([
+                        dbc.Label("Nova modalidade *"),
+                        dbc.Select(id="inp-perfil-acao-modal",
+                                   options=[{"label": m["nome"], "value": m["id"]}
+                                            for m in modalids]),
+                    ], id="perfil-acao-modal-row", className="mb-3"),
+                ]),
+                dbc.Checkbox(id="inp-perfil-acao-renovacao", label="Renovação automática no novo plano", value=True, className="mb-2"),
+                html.Div(id="modal-perfil-acao-erro", className="text-danger mt-2",
+                         style={"fontSize": "13px"}),
+            ]),
+            dbc.ModalFooter([
+                dbc.Button("Cancelar", id="btn-perfil-acao-cancel",
+                           color="secondary", outline=True),
+                dbc.Button(id="btn-perfil-acao-confirmar", color="primary"),
+            ]),
+        ], id="modal-perfil-acao-mat", is_open=False),
     ], style={"boxShadow": "0 2px 8px rgba(0,0,0,.07)"})
 
     return html.Div([
@@ -2523,6 +2584,17 @@ def trocar_perfil_tab(n_clicks):
     if isinstance(tid, dict) and tid.get("type") == "btn-perfil-tab" and valor > 0:
         return tid["index"]
     raise PreventUpdate
+
+
+@app.callback(
+    Output({"type": "btn-perfil-tab", "index": ALL}, "style"),
+    Input("store-perfil-tab", "data"),
+)
+def estilizar_tabs_perfil(tab_ativa):
+    return [
+        _perfil_tab_style(tab_ativa == "financeiro"),
+        _perfil_tab_style(tab_ativa == "matriculas"),
+    ]
 
 
 @app.callback(
@@ -2685,8 +2757,11 @@ def atualizar_perfil_matriculas(filtro, _refresh, aluno_id):
     for m in matriculas:
         data_fim = date.fromisoformat(m["data_fim"]) if m.get("data_fim") else None
         vence_txt = f"Vence dia {data_fim.day}" if data_fim else "—"
+        vigencia_txt = f"{_fmt_data(m['data_inicio'])} a {_fmt_data(m['data_fim'])}"
         periodo = "Mensal" if m.get("meses") == 1 else (
             f"{m['meses']} meses" if m.get("meses") else "—")
+        motivo_txt = MOTIVO_MATRICULA_LABELS.get(m.get("motivo_encerramento") or "", "")
+        data_enc_txt = _fmt_data(m.get("data_encerramento")) if m.get("data_encerramento") else None
 
         # Ícone de status
         if m["status"] == "ativo":
@@ -2712,6 +2787,20 @@ def atualizar_perfil_matriculas(filtro, _refresh, aluno_id):
                        "padding": "3px 10px", "borderRadius": "4px"},
             )
 
+        botoes_acao = []
+        if m["status"] in ("ativo", "aguardando_pagamento", "inadimplente"):
+            botoes_acao.append(dbc.Button(
+                [html.I(className="bi bi-arrow-left-right me-1"), "Mudar plano"],
+                id={"type": "btn-perfil-mudar-plano", "index": m["id"]},
+                size="sm", color="primary", outline=True,
+                className="me-1",
+            ))
+            botoes_acao.append(dbc.Button(
+                [html.I(className="bi bi-x-circle me-1"), "Cancelar"],
+                id={"type": "btn-perfil-cancelar-mat", "index": m["id"]},
+                size="sm", color="danger", outline=True,
+            ))
+
         linhas.append(html.Tr([
             html.Td([
                 html.Div(m["plano"], style={"color": "#0d6efd", "fontWeight": "600"}),
@@ -2720,17 +2809,25 @@ def atualizar_perfil_matriculas(filtro, _refresh, aluno_id):
             html.Td([
                 html.Div(_fmt_data(m["data_inicio"])),
                 html.Small(vence_txt, style={"color": "#888"}),
+                html.Br(),
+                html.Small(f"Vigência: {vigencia_txt}", style={"color": "#555"}),
+                *( [html.Br(), html.Small(f"Encerrada em {data_enc_txt}", style={"color": "#888"})] if data_enc_txt else [] ),
             ], style={"padding": "10px 14px"}),
             html.Td(periodo, style={"padding": "10px 14px"}),
             html.Td(_fmt_brl(m.get("valor_contratado") or m.get("valor")),
                     style={"textAlign": "right", "fontWeight": "700",
                            "color": COR_PRIMARIA, "padding": "10px 14px"}),
             html.Td(
-                [icone, html.Span(" "), _badge_status(m["status"]),
-                 html.Span(" "), btn_receber] if btn_receber else
-                [icone, html.Span(" "), _badge_status(m["status"])],
+                [
+                    html.Div([
+                        icone, html.Span(" "), _badge_status(m["status"]),
+                        *( [html.Span(f"  {motivo_txt}", style={"color": "#888", "fontSize": "11px"})] if motivo_txt else [] ),
+                    ], className="mb-1" if (btn_receber or botoes_acao) else ""),
+                    *( [html.Div(btn_receber, className="mb-1")] if btn_receber else [] ),
+                    *( [html.Div(botoes_acao, style={"display": "flex", "justifyContent": "flex-end", "gap": "4px", "flexWrap": "wrap"})] if botoes_acao else [] ),
+                ],
                 style={"textAlign": "right", "whiteSpace": "nowrap",
-                       "padding": "8px 14px"},
+                        "padding": "8px 14px"},
             ),
         ], style={"borderBottom": "1px solid #f0f0f0"}))
 
@@ -2740,7 +2837,7 @@ def atualizar_perfil_matriculas(filtro, _refresh, aluno_id):
     return html.Table(
         [html.Thead(html.Tr([
             html.Th("Plano e Modalidade", style=_th),
-            html.Th("Matrícula", style=_th),
+            html.Th("Matrícula / Vigência", style=_th),
             html.Th("Periodicidade", style=_th),
             html.Th("Valor", style={**_th, "textAlign": "right"}),
             html.Th("", style={**_th, "width": "180px"}),
@@ -2955,6 +3052,24 @@ def toggle_perfil_modalidade_field(plano_id):
     return {}, None
 
 
+@app.callback(
+    Output("perfil-acao-modal-row", "style"),
+    Output("inp-perfil-acao-modal", "value"),
+    Input("inp-perfil-acao-plano", "value"),
+)
+def toggle_perfil_acao_modalidade_field(plano_id):
+    if not plano_id:
+        return {}, None
+    conn = get_conn()
+    p = conn.execute(
+        "SELECT modalidade_id FROM tipos_plano WHERE id=?", (int(plano_id),)
+    ).fetchone()
+    conn.close()
+    if p and p["modalidade_id"]:
+        return {"display": "none"}, str(p["modalidade_id"])
+    return {}, None
+
+
 # ── Perfil: modal nova matrícula ──────────────────────────────────────────
 
 @app.callback(
@@ -2991,6 +3106,123 @@ def controlar_modal_perfil_mat(n_abrir, n_cancel, n_confirmar,
             aluno_id, int(plano_id), int(modal_id), inicio
         )
         return False, "", (refresh or 0) + 1
+    raise PreventUpdate
+
+
+@app.callback(
+    Output("modal-perfil-acao-mat", "is_open"),
+    Output("modal-perfil-acao-titulo", "children"),
+    Output("modal-perfil-acao-info", "children"),
+    Output("store-perfil-acao-mat", "data"),
+    Output("inp-perfil-acao-motivo", "value"),
+    Output("inp-perfil-acao-data", "value"),
+    Output("perfil-acao-novo-plano-wrap", "style"),
+    Output("inp-perfil-acao-plano", "value"),
+    Output("inp-perfil-acao-modal", "value"),
+    Output("inp-perfil-acao-renovacao", "value"),
+    Output("inp-perfil-acao-renovacao", "style"),
+    Output("btn-perfil-acao-confirmar", "children"),
+    Output("btn-perfil-acao-confirmar", "color"),
+    Output("modal-perfil-acao-erro", "children"),
+    Output("store-perfil-refresh", "data", allow_duplicate=True),
+    Input({"type": "btn-perfil-mudar-plano", "index": ALL}, "n_clicks"),
+    Input({"type": "btn-perfil-cancelar-mat", "index": ALL}, "n_clicks"),
+    Input("btn-perfil-acao-cancel", "n_clicks"),
+    Input("btn-perfil-acao-confirmar", "n_clicks"),
+    State("store-perfil-acao-mat", "data"),
+    State("inp-perfil-acao-motivo", "value"),
+    State("inp-perfil-acao-data", "value"),
+    State("inp-perfil-acao-plano", "value"),
+    State("inp-perfil-acao-modal", "value"),
+    State("inp-perfil-acao-renovacao", "value"),
+    State("store-perfil-refresh", "data"),
+    prevent_initial_call=True,
+)
+def controlar_modal_acao_matricula(mudar_clicks, cancelar_clicks, n_cancel, n_confirmar,
+                                   acao_store, motivo, data_mudanca, plano_id,
+                                   modal_id, renovacao, refresh):
+    tid = callback_context.triggered_id
+    valor = (callback_context.triggered[0].get("value") or 0) if callback_context.triggered else 0
+    oculto = {"display": "none"}
+    visivel = {"display": "block"}
+
+    if tid == "btn-perfil-acao-cancel":
+        if not n_cancel:
+            raise PreventUpdate
+        return False, no_update, no_update, None, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, "", no_update
+
+    if isinstance(tid, dict) and tid.get("type") in ("btn-perfil-mudar-plano", "btn-perfil-cancelar-mat"):
+        if valor <= 0:
+            raise PreventUpdate
+        mat_id = tid["index"]
+        conn = get_conn()
+        mat = conn.execute("""
+            SELECT m.*, a.nome AS aluno_nome, tp.nome AS plano_nome, mod.nome AS modalidade_nome
+            FROM matriculas m
+            JOIN alunos a ON a.id = m.aluno_id
+            JOIN tipos_plano tp ON tp.id = m.tipo_plano_id
+            JOIN modalidades mod ON mod.id = m.modalidade_id
+            WHERE m.id=?
+        """, (mat_id,)).fetchone()
+        conn.close()
+        if not mat:
+            raise PreventUpdate
+        mat = dict(mat)
+        tipo_acao = "mudanca" if tid.get("type") == "btn-perfil-mudar-plano" else "cancelamento"
+        info = [
+            html.Strong(mat["aluno_nome"]), html.Br(),
+            html.Span(f"Plano atual: {mat['plano_nome']} / {mat['modalidade_nome']}"), html.Br(),
+            html.Span(f"Início: {_fmt_data(mat['data_inicio'])}  |  Fim atual: {_fmt_data(mat['data_fim'])}"),
+        ]
+        return (
+            True,
+            "Mudar Plano" if tipo_acao == "mudanca" else "Cancelar Matrícula",
+            info,
+            {"matricula_id": mat_id, "acao": tipo_acao},
+            "mudanca_de_plano" if tipo_acao == "mudanca" else "cancelamento_de_plano",
+            date.today().isoformat(),
+            visivel if tipo_acao == "mudanca" else oculto,
+            None,
+            None,
+            True,
+            visivel if tipo_acao == "mudanca" else oculto,
+            [html.I(className="bi bi-arrow-left-right me-1"), "Confirmar mudança"] if tipo_acao == "mudanca" else [html.I(className="bi bi-x-circle me-1"), "Confirmar cancelamento"],
+            "primary" if tipo_acao == "mudanca" else "danger",
+            "",
+            no_update,
+        )
+
+    if tid == "btn-perfil-acao-confirmar":
+        if not n_confirmar:
+            raise PreventUpdate
+        if not acao_store or not acao_store.get("matricula_id"):
+            return no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, "Selecione a matrícula novamente.", no_update
+        if not motivo or not data_mudanca:
+            return no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, "Informe o motivo e a data da mudança.", no_update
+
+        if acao_store.get("acao") == "mudanca":
+            if not plano_id or not modal_id:
+                return no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, "Selecione o novo plano e a nova modalidade.", no_update
+            ok, msg, _ = alunos_mod.trocar_plano_matricula(
+                acao_store["matricula_id"],
+                int(plano_id),
+                int(modal_id),
+                data_mudanca,
+                motivo=motivo,
+                renovacao_auto=bool(renovacao),
+            )
+        else:
+            ok, msg = alunos_mod.encerrar_matricula(
+                acao_store["matricula_id"],
+                data_mudanca=data_mudanca,
+                motivo=motivo,
+                status_destino="cancelado",
+            )
+
+        if ok:
+            return False, no_update, no_update, None, no_update, no_update, no_update, None, None, True, no_update, no_update, no_update, "", (refresh or 0) + 1
+        return no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, no_update, msg, no_update
+
     raise PreventUpdate
 
 

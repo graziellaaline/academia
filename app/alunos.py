@@ -13,6 +13,11 @@ from app.database import get_conn
 logger = logging.getLogger(__name__)
 
 STATUS_MATRICULA_ABERTOS = ("ativo", "aguardando_pagamento", "inadimplente")
+MOTIVOS_MATRICULA = (
+    "financeiro",
+    "mudanca_de_plano",
+    "cancelamento_de_plano",
+)
 
 
 # ── Alunos ─────────────────────────────────────────────────────────────────
@@ -168,6 +173,13 @@ def buscar_matricula_corrente(aluno_id: int):
     return dict(row) if row else None
 
 
+def _normalizar_data_mudanca(data_mudanca: str, data_inicio_atual: str) -> tuple[str, str]:
+    data_ref = date.fromisoformat(data_mudanca)
+    data_inicio = date.fromisoformat(data_inicio_atual)
+    data_fim = max(data_inicio, data_ref - timedelta(days=1))
+    return data_ref.isoformat(), data_fim.isoformat()
+
+
 def criar_matricula(aluno_id: int, tipo_plano_id: int, modalidade_id: int = None,
                     data_inicio: str = None, renovacao_auto: bool = True,
                     valor_override: float = None):
@@ -310,6 +322,67 @@ def cancelar_matricula(matricula_id: int):
     )
     conn.commit()
     conn.close()
+
+
+def encerrar_matricula(matricula_id: int, data_mudanca: str, motivo: str,
+                      status_destino: str = "cancelado"):
+    if status_destino not in ("cancelado", "encerrado"):
+        return False, "Status de encerramento inválido."
+    if motivo not in MOTIVOS_MATRICULA:
+        return False, "Motivo inválido para a matrícula."
+
+    conn = get_conn()
+    mat = conn.execute("SELECT * FROM matriculas WHERE id=?", (matricula_id,)).fetchone()
+    if not mat:
+        conn.close()
+        return False, "Matrícula não encontrada."
+
+    data_ref, data_fim = _normalizar_data_mudanca(data_mudanca, mat["data_inicio"])
+    conn.execute("""
+        UPDATE matriculas
+        SET status=?,
+            renovacao_auto=0,
+            data_fim=?,
+            data_encerramento=?,
+            motivo_encerramento=?
+        WHERE id=?
+    """, (status_destino, data_fim, data_ref, motivo, matricula_id))
+    conn.execute("""
+        UPDATE pagamentos
+        SET status='cancelado'
+        WHERE matricula_id=? AND status IN ('pendente', 'vencido')
+    """, (matricula_id,))
+    conn.commit()
+    conn.close()
+    return True, "Matrícula encerrada."
+
+
+def trocar_plano_matricula(matricula_id: int, novo_plano_id: int, nova_modalidade_id: int,
+                           data_mudanca: str, motivo: str = "mudanca_de_plano",
+                           renovacao_auto: bool = True):
+    conn = get_conn()
+    mat = conn.execute("SELECT * FROM matriculas WHERE id=?", (matricula_id,)).fetchone()
+    conn.close()
+    if not mat:
+        return False, "Matrícula não encontrada.", None
+
+    ok, msg = encerrar_matricula(
+        matricula_id,
+        data_mudanca=data_mudanca,
+        motivo=motivo,
+        status_destino="encerrado",
+    )
+    if not ok:
+        return False, msg, None
+
+    nova_matricula_id, msg_nova = criar_matricula(
+        mat["aluno_id"],
+        novo_plano_id,
+        nova_modalidade_id,
+        data_inicio=data_mudanca,
+        renovacao_auto=renovacao_auto,
+    )
+    return True, msg_nova, nova_matricula_id
 
 
 # ── Pagamentos ─────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ Lógica de renovação automática de matrículas.
 
 Fluxo:
 1. Todo dia (ou ao abrir o sistema), verificar_vencimentos() é chamada.
-2. Matrículas ativas com data_fim <= hoje + DIAS_AVISO geram pagamento pendente
+    2. Matrículas ativas com data_fim <= hoje + DIAS_AVISO geram pagamento pendente
    para o próximo período (se ainda não existir).
 3. Quando o pagamento é confirmado (baixar_pagamento), a matrícula tem
    data_fim estendida e status volta para 'ativo'.
@@ -46,7 +46,7 @@ def verificar_vencimentos():
         SELECT m.*, tp.meses, tp.valor, tp.nome AS nome_plano
         FROM   matriculas m
         JOIN   tipos_plano tp ON tp.id = m.tipo_plano_id
-        WHERE  m.status IN ('ativo', 'aguardando_pagamento')
+        WHERE  m.status = 'ativo'
           AND  m.renovacao_auto = 1
     """).fetchall()
 
