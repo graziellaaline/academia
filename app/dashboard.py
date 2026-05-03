@@ -1890,7 +1890,8 @@ def atualizar_tabela_pag(status, periodo, dt_ini, dt_fim, busca, _filtrar, tab, 
     conn = _gc()
     sql = """
         SELECT p.*, a.nome AS aluno_nome, a.id AS aluno_id,
-               tp.nome AS plano, mod.nome AS modalidade
+               tp.nome AS plano, mod.nome AS modalidade,
+               m.data_inicio AS mat_inicio, m.data_fim AS mat_fim
         FROM pagamentos p
         JOIN alunos a        ON a.id  = p.aluno_id
         JOIN matriculas m    ON m.id  = p.matricula_id
@@ -1993,11 +1994,14 @@ def atualizar_tabela_pag(status, periodo, dt_ini, dt_fim, busca, _filtrar, tab, 
                        "color": "#dc3545" if is_vencido else "#555",
                        "fontWeight": "500", "width": "115px"},
             ),
-            html.Td(
-                f"{p['aluno_nome']} ({p['aluno_id']})",
-                style={"color": "#0d6efd", "fontWeight": "500",
-                       "padding": "10px 14px"},
-            ),
+            html.Td([
+                html.Div(f"{p['aluno_nome']} ({p['aluno_id']})",
+                         style={"color": "#0d6efd", "fontWeight": "500"}),
+                html.Small(
+                    f"{p['plano']}  ·  {_fmt_data(p.get('mat_inicio'))} a {_fmt_data(p.get('mat_fim'))}",
+                    style={"color": "#888"},
+                ),
+            ], style={"padding": "10px 14px"}),
             html.Td(
                 _fmt_brl(valor_liq),
                 style={"textAlign": "right", "fontWeight": "700",
@@ -2462,6 +2466,26 @@ def _aba_perfil_aluno(aluno_id: int):
     ], style={"boxShadow": "0 2px 8px rgba(0,0,0,.07)"})
 
     return html.Div([
+        # Barra de busca rápida de aluno
+        html.Div([
+            html.Div([
+                html.I(className="bi bi-search me-2",
+                       style={"color": "#999", "fontSize": "14px"}),
+                dbc.Input(
+                    id="perfil-busca-aluno",
+                    placeholder="Buscar outro aluno por nome ou telefone...",
+                    debounce=False, size="sm",
+                    style={"border": "none", "outline": "none",
+                           "background": "transparent", "boxShadow": "none",
+                           "fontSize": "14px", "color": "#333"},
+                ),
+            ], className="d-flex align-items-center px-3 py-2",
+               style={"background": "white", "borderRadius": "8px",
+                      "boxShadow": "0 2px 8px rgba(0,0,0,.08)"}),
+            html.Div(id="perfil-busca-resultados",
+                     style={"position": "absolute", "width": "100%", "zIndex": "1000"}),
+        ], style={"position": "relative", "marginBottom": "12px"}),
+
         # Breadcrumb
         html.Div([
             dcc.Link("← Alunos", href="/alunos",
@@ -2531,7 +2555,8 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
     conn = get_conn()
     ph = ",".join("?" * len(status_filter))
     rows_db = conn.execute(f"""
-        SELECT p.*, tp.nome AS plano_nome, mod.nome AS modalidade_nome
+        SELECT p.*, tp.nome AS plano_nome, mod.nome AS modalidade_nome,
+               m.data_inicio AS mat_inicio, m.data_fim AS mat_fim
         FROM pagamentos p
         JOIN matriculas m ON m.id = p.matricula_id
         JOIN tipos_plano tp ON tp.id = m.tipo_plano_id
@@ -2550,8 +2575,9 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
         valor_liq = float(p["valor"]) - desconto
         is_venc = (p["status"] == "vencido" or
                    (p["status"] == "pendente" and (p["data_vencimento"] or "") < hoje))
-        referencia = (f"Mensalidade {_fmt_data(p['data_vencimento'])} — "
-                      f"{p['plano_nome']} / {p['modalidade_nome']}")
+        periodo_ref = (f"{_fmt_data(p.get('mat_inicio'))} a {_fmt_data(p.get('mat_fim'))}"
+                       if p.get("mat_inicio") else _fmt_data(p["data_vencimento"]))
+        referencia = f"Mensalidade {periodo_ref} — {p['plano_nome']}"
         btn_ver = dbc.Button(
             html.I(className="bi bi-cash-coin"),
             id={"type": "btn-perfil-ver-pag", "index": p["id"]},
@@ -2855,6 +2881,44 @@ def controlar_modal_perfil_edit(edit_clicks, n_cancel, n_salvar,
         return no_update, no_update, no_update, no_update, no_update, msg, no_update
 
     raise PreventUpdate
+
+
+# ── Perfil: busca rápida de aluno ─────────────────────────────────────────────
+
+@app.callback(
+    Output("perfil-busca-resultados", "children"),
+    Input("perfil-busca-aluno",        "value"),
+)
+def buscar_aluno_no_perfil(busca):
+    if not busca or len(busca) < 2:
+        return None
+    lista = alunos_mod.listar_alunos(busca=busca)[:8]
+    if not lista:
+        return html.Div("Nenhum aluno encontrado.",
+                        className="px-3 py-2 text-muted",
+                        style={"background": "white", "borderRadius": "8px",
+                               "boxShadow": "0 4px 16px rgba(0,0,0,.12)",
+                               "marginTop": "4px"})
+    return html.Div([
+        dcc.Link(
+            html.Div([
+                html.Span(f"#{a['id']:04d} ",
+                          style={"color": COR_ACENTO, "fontWeight": "700", "fontSize": "12px"}),
+                html.Span(a["nome"], style={"fontWeight": "500"}),
+                html.Span(f"  {a.get('telefone') or ''}",
+                          style={"color": "#aaa", "fontSize": "12px"}),
+                html.Span(" ", className="ms-2"),
+                _badge_status(a["status"]),
+            ], className="px-3 py-2 d-flex align-items-center",
+               style={"borderBottom": "1px solid #f0f0f0", "cursor": "pointer"}),
+            href=f"/alunos/{a['id']}",
+            style={"textDecoration": "none", "color": "#333", "display": "block"},
+            refresh=False,
+        )
+        for a in lista
+    ], style={"background": "white", "borderRadius": "8px",
+              "boxShadow": "0 4px 16px rgba(0,0,0,.15)",
+              "marginTop": "4px", "overflow": "hidden"})
 
 
 # ── Perfil: esconde Modalidade quando plano já tem uma ──────────────────────
