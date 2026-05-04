@@ -2700,7 +2700,7 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
     rows_db = [dict(r) for r in rows_db][:5]
     total = sum(float(r["valor"]) - float(r.get("desconto") or 0)
                 for r in rows_db if r["status"] not in ("cancelado",))
-    titulo_data = "RECEBIDO EM" if tipo == "recebimentos" else "VENCIMENTO"
+    titulo_data = "VENCIMENTO"
     linhas = []
     for p in rows_db:
         desconto = float(p.get("desconto") or 0)
@@ -2709,7 +2709,7 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
                    (p["status"] == "pendente" and (p["data_vencimento"] or "") < hoje))
         referencia = _referencia_pagamento(p)
         vigencia_txt = _vigencia_pagamento(p)
-        data_principal = p["data_pagamento"] if tipo == "recebimentos" else p["data_vencimento"]
+        data_principal = p["data_vencimento"]
         btn_ver = dbc.Button(
             html.I(className="bi bi-cash-coin"),
             id={"type": "btn-perfil-ver-pag", "index": p["id"]},
@@ -2822,7 +2822,7 @@ def atualizar_perfil_matriculas(filtro, _refresh, aluno_id):
     linhas = []
     for m in matriculas:
         data_fim = date.fromisoformat(m["data_fim"]) if m.get("data_fim") else None
-        vence_txt = f"Vence dia {data_fim.day}" if data_fim else "—"
+        vence_txt = f"Vencimento: {_fmt_data(m['data_fim'])}" if data_fim else "Vencimento: —"
         vigencia_txt = f"De {_fmt_data(m['data_inicio'])} até {_fmt_data(m['data_fim'])}"
         periodo = "Mensal" if m.get("meses") == 1 else (
             f"{m['meses']} meses" if m.get("meses") else "—")
