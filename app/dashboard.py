@@ -2742,7 +2742,7 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
                 html.Div(referencia, style={"color": "#0d6efd", "fontWeight": "600"}),
                 html.Div("Vigência do plano", style={"color": "#888", "fontSize": "11px", "marginTop": "4px"}),
                 html.Div(vigencia_txt, style={"color": COR_PRIMARIA, "fontWeight": "700", "fontSize": "12px"}),
-                *( [html.Div(f"Pago em {_fmt_data(p['data_pagamento'])}", style={"color": "#198754", "fontSize": "12px", "marginTop": "4px"})] if tipo == "recebimentos" and p.get("data_pagamento") else [] ),
+                *( [html.Div(f"Recebida em {_fmt_data(p['data_pagamento'])}", style={"color": "#198754", "fontSize": "12px", "marginTop": "4px", "fontWeight": "600"})] if p.get("status") == "pago" and p.get("data_pagamento") else [] ),
             ], style={"minWidth": "360px"}),
             html.Td([
                 html.Span(_fmt_brl(valor_liq),

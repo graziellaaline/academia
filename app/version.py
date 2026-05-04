@@ -12,7 +12,7 @@
 #   O resto do código lê daqui — nunca escreva a versão em outro lugar.
 # ---------------------------------------------------------------------------
 
-__version__ = "V1.4.21"
+__version__ = "V1.4.22"
 SYSTEM_NAME  = "Centro de Treinamento RV"
 
 
