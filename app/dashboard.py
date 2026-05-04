@@ -2877,6 +2877,8 @@ def atualizar_perfil_matriculas(filtro, _refresh, aluno_id):
             html.Td([
                 html.Div(_fmt_data(m["data_inicio"]), style={"fontWeight": "600"}),
                 html.Div(vence_txt, style={"color": "#888", "fontSize": "12px"}),
+                html.Div("Vigência do plano", style={"color": "#888", "fontSize": "11px", "marginTop": "6px"}),
+                html.Div(vigencia_txt, style={"color": COR_PRIMARIA, "fontWeight": "700", "fontSize": "12px"}),
                 *([html.Div(f"Encerrada em {data_enc_txt}", style={"color": "#888", "fontSize": "12px", "marginTop": "4px"})] if data_enc_txt else []),
             ], style={"padding": "10px 14px"}),
             html.Td(periodo, style={"padding": "10px 14px"}),
