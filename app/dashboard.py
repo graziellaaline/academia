@@ -2239,26 +2239,14 @@ def _perfil_tab_bar(tab_ativa):
 
 
 def _perfil_tab_financeiro(aluno_id):
-    hoje = date.today().isoformat()
     return html.Div([
-        dcc.Store(id="store-perfil-fin-tipo",   data="cobrancas"),
-        dcc.Store(id="store-perfil-fin-filtro", data="todas"),
         html.Div([
             html.Div([
                 dbc.RadioItems(
-                    id="perfil-fin-tipo",
+                    id="perfil-fin-visao",
                     options=[{"label": "Cobranças",    "value": "cobrancas"},
-                             {"label": "Recebimentos", "value": "recebimentos"}],
-                    value="cobrancas", inline=True, className="me-4 perfil-radio-items",
-                    inputStyle={"marginRight": "4px"},
-                ),
-                html.Span(style={"borderLeft": "1px solid #ddd", "margin": "0 12px"}),
-                dbc.RadioItems(
-                    id="perfil-fin-filtro",
-                    options=[{"label": "Abertas",    "value": "abertas"},
-                             {"label": "Canceladas", "value": "canceladas"},
                              {"label": "Todas",      "value": "todas"}],
-                    value="todas", inline=True, className="perfil-radio-items",
+                    value="todas", inline=True, className="me-4 perfil-radio-items",
                     inputStyle={"marginRight": "4px"},
                 ),
             ], className="d-flex align-items-center", style={"flexWrap": "wrap", "gap": "8px"}),
@@ -2663,20 +2651,17 @@ def _vigencia_pagamento(pagamento: dict):
 @app.callback(
     Output("perfil-fin-tabela", "children"),
     Output("perfil-fin-total",  "children"),
-    Input("perfil-fin-tipo",    "value"),
-    Input("perfil-fin-filtro",  "value"),
+    Input("perfil-fin-visao",   "value"),
     Input("store-perfil-refresh", "data"),
     State("store-perfil-aluno-id","data"),
 )
-def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
+def atualizar_perfil_financeiro(visao, _refresh, aluno_id):
     if not aluno_id:
         raise PreventUpdate
     hoje = date.today().isoformat()
-    if tipo == "recebimentos":
+    if visao == "recebimentos":
         status_filter = ("pago",)
-    elif filtro == "canceladas":
-        status_filter = ("cancelado",)
-    elif filtro == "todas":
+    elif visao == "todas":
         status_filter = ("pendente", "vencido", "pago", "cancelado")
     else:
         status_filter = ("pendente", "vencido")
@@ -2697,10 +2682,9 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
     """, (aluno_id,) + status_filter).fetchall()
     conn.close()
 
-    rows_db = [dict(r) for r in rows_db][:5]
+    rows_db = [dict(r) for r in rows_db]
     total = sum(float(r["valor"]) - float(r.get("desconto") or 0)
                 for r in rows_db if r["status"] not in ("cancelado",))
-    titulo_data = "VENCIMENTO"
     linhas = []
     for p in rows_db:
         desconto = float(p.get("desconto") or 0)
@@ -2709,7 +2693,16 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
                    (p["status"] == "pendente" and (p["data_vencimento"] or "") < hoje))
         referencia = _referencia_pagamento(p)
         vigencia_txt = _vigencia_pagamento(p)
-        data_principal = p["data_vencimento"]
+        status_txt = "Atrasada" if is_venc and p["status"] in ("pendente", "vencido") else (
+            "Aberta" if p["status"] == "pendente" else
+            "Recebida" if p["status"] == "pago" else
+            "Cancelada"
+        )
+        status_cor = "danger" if status_txt == "Atrasada" else (
+            "warning" if status_txt == "Aberta" else
+            "success" if status_txt == "Recebida" else
+            "secondary"
+        )
         btn_ver = dbc.Button(
             html.I(className="bi bi-cash-coin"),
             id={"type": "btn-perfil-ver-pag", "index": p["id"]},
@@ -2725,7 +2718,7 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
                    "color": "white", "padding": "2px 7px"},
         )
         chk = ""
-        if tipo == "cobrancas" and p["status"] in ("pendente", "vencido"):
+        if visao in ("cobrancas", "todas") and p["status"] in ("pendente", "vencido"):
             chk = dcc.Checklist(
                 id={"type": "chk-perfil-pag", "index": p["id"]},
                 options=[{"label": "", "value": p["id"]}],
@@ -2733,46 +2726,67 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
                 inputStyle={"marginRight": "0"},
                 style={"display": "flex", "justifyContent": "center"},
             )
-        linhas.append(html.Tr([
-            html.Td(chk, style={"textAlign": "center", "width": "42px"}),
-            html.Td(_fmt_data(data_principal),
-                   style={"color": "#dc3545" if (tipo == 'cobrancas' and is_venc) else "#333",
-                          "fontWeight": "600", "whiteSpace": "nowrap"}),
-            html.Td([
-                html.Div(referencia, style={"color": "#0d6efd", "fontWeight": "600"}),
-                html.Div("Vigência do plano", style={"color": "#888", "fontSize": "11px", "marginTop": "4px"}),
-                html.Div(vigencia_txt, style={"color": COR_PRIMARIA, "fontWeight": "700", "fontSize": "12px"}),
-                *( [html.Div(f"Recebida em {_fmt_data(p['data_pagamento'])}", style={"color": "#198754", "fontSize": "12px", "marginTop": "4px", "fontWeight": "600"})] if p.get("status") == "pago" and p.get("data_pagamento") else [] ),
-            ], style={"minWidth": "360px"}),
-            html.Td([
-                html.Span(_fmt_brl(valor_liq),
-                         style={"fontWeight": "700", "color": COR_PRIMARIA}),
-                *([html.Br(),
-                   html.Small(_fmt_brl(p["valor"]),
-                              style={"textDecoration": "line-through", "color": "#aaa",
-                                     "fontSize": "10px"})]
-                  if desconto > 0 else []),
-            ], style={"textAlign": "right"}),
-            html.Td([btn_ver, btn_edit],
-                    style={"textAlign": "right", "whiteSpace": "nowrap"}),
-        ], style={"backgroundColor": "#fff5f5" if is_venc else ""}))
+
+        if visao == "recebimentos":
+            linhas.append(html.Tr([
+                html.Td(_fmt_data(p["data_pagamento"]), style={"fontWeight": "600", "whiteSpace": "nowrap"}),
+                html.Td([
+                    html.Div(f"{p['modalidade_nome']} - {p['plano_nome']}", style={"color": "#0d6efd", "fontWeight": "600"}),
+                    html.Div(vigencia_txt, style={"color": COR_PRIMARIA, "fontWeight": "700", "fontSize": "12px", "marginTop": "4px"}),
+                ], style={"minWidth": "320px"}),
+                html.Td(_fmt_brl(valor_liq), style={"textAlign": "right", "fontWeight": "700", "color": COR_PRIMARIA}),
+                html.Td(_fmt_data(p["data_vencimento"]), style={"whiteSpace": "nowrap"}),
+                html.Td([dbc.Badge(status_txt, color=status_cor)], style={"textAlign": "right"}),
+                html.Td(btn_edit, style={"textAlign": "right", "whiteSpace": "nowrap"}),
+            ]))
+        else:
+            linhas.append(html.Tr([
+                html.Td(chk, style={"textAlign": "center", "width": "42px"}),
+                html.Td(_fmt_data(p["data_vencimento"]),
+                       style={"color": "#dc3545" if is_venc else "#333",
+                              "fontWeight": "600", "whiteSpace": "nowrap"}),
+                html.Td([
+                    html.Div(referencia, style={"color": "#0d6efd", "fontWeight": "600"}),
+                    html.Div(vigencia_txt, style={"color": COR_PRIMARIA, "fontWeight": "700", "fontSize": "12px", "marginTop": "4px"}),
+                    *( [html.Div(f"Recebida em {_fmt_data(p['data_pagamento'])}", style={"color": "#198754", "fontSize": "12px", "marginTop": "4px", "fontWeight": "600"})] if p.get("status") == "pago" and p.get("data_pagamento") else [] ),
+                ], style={"minWidth": "360px"}),
+                html.Td([
+                    html.Span(_fmt_brl(valor_liq),
+                             style={"fontWeight": "700", "color": COR_PRIMARIA}),
+                    *([html.Br(),
+                       html.Small(_fmt_brl(p["valor"]),
+                                  style={"textDecoration": "line-through", "color": "#aaa",
+                                         "fontSize": "10px"})]
+                      if desconto > 0 else []),
+                ], style={"textAlign": "right"}),
+                html.Td(dbc.Badge(status_txt, color=status_cor), style={"textAlign": "right", "whiteSpace": "nowrap"}),
+                html.Td(([btn_ver, btn_edit] if p["status"] in ("pendente", "vencido") else [btn_edit]),
+                        style={"textAlign": "right", "whiteSpace": "nowrap"}),
+            ], style={"backgroundColor": "#fff5f5" if is_venc else ""}))
 
     if not linhas:
         tabela = html.Div("Nenhum registro encontrado.", className="text-muted p-3")
     else:
-        tabela = dbc.Table(
-            [html.Thead(html.Tr([
-                html.Th("", style={"width": "42px"}),
-                html.Th(titulo_data,
-                        style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
-                html.Th("REFERÊNCIA",
-                        style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
-                html.Th("VALOR",
-                        style={"fontSize": "11px", "color": "#888", "fontWeight": "700",
-                               "textAlign": "right"}),
+        if visao == "recebimentos":
+            header = html.Thead(html.Tr([
+                html.Th("DATA DA BAIXA", style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
+                html.Th("PLANO", style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
+                html.Th("VALOR", style={"fontSize": "11px", "color": "#888", "fontWeight": "700", "textAlign": "right"}),
+                html.Th("VENCIMENTO", style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
+                html.Th("STATUS", style={"fontSize": "11px", "color": "#888", "fontWeight": "700", "textAlign": "right"}),
                 html.Th("", style={"fontSize": "11px"}),
-            ])),
-             html.Tbody(linhas)],
+            ]))
+        else:
+            header = html.Thead(html.Tr([
+                html.Th("", style={"width": "42px"}),
+                html.Th("VENCIMENTO", style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
+                html.Th("REFERÊNCIA", style={"fontSize": "11px", "color": "#888", "fontWeight": "700"}),
+                html.Th("VALOR", style={"fontSize": "11px", "color": "#888", "fontWeight": "700", "textAlign": "right"}),
+                html.Th("STATUS", style={"fontSize": "11px", "color": "#888", "fontWeight": "700", "textAlign": "right"}),
+                html.Th("", style={"fontSize": "11px"}),
+            ]))
+        tabela = dbc.Table(
+            [header, html.Tbody(linhas)],
             bordered=False, hover=True, size="sm", responsive=True,
         )
     total_txt = ["Total  ",
