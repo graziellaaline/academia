@@ -2226,14 +2226,6 @@ def _perfil_tab_bar(tab_ativa):
     return html.Div([
         _perfil_tab_btn("financeiro", "FINANCEIRO", tab_ativa == "financeiro"),
         _perfil_tab_btn("matriculas", "MATRÍCULAS", tab_ativa == "matriculas"),
-        html.Span("TREINOS", style={
-            "color": "#aaa", "padding": "12px 22px", "fontSize": "12px",
-            "fontWeight": "700", "letterSpacing": ".5px", "cursor": "default",
-        }),
-        html.Span("AVALIAÇÕES", style={
-            "color": "#aaa", "padding": "12px 22px", "fontSize": "12px",
-            "fontWeight": "700", "letterSpacing": ".5px", "cursor": "default",
-        }),
     ], style={"background": COR_PRIMARIA, "display": "flex",
               "borderRadius": "8px 8px 0 0", "overflow": "hidden"})
 

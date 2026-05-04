@@ -2,6 +2,15 @@
   filter: brightness(1.08);
 }
 
+#perfil-tabs-topo {
+  gap: 2px;
+}
+
+.perfil-tab-btn {
+  min-width: 180px;
+  justify-content: center;
+}
+
 #perfil-fin-tipo .form-check,
 #perfil-fin-filtro .form-check,
 #perfil-mat-filtro .form-check {
