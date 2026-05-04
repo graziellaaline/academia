@@ -2237,6 +2237,7 @@ def _perfil_tab_financeiro(aluno_id):
                 dbc.RadioItems(
                     id="perfil-fin-visao",
                     options=[{"label": "Cobranças",    "value": "cobrancas"},
+                             {"label": "Recebimentos", "value": "recebimentos"},
                              {"label": "Todas",      "value": "todas"}],
                     value="todas", inline=True, className="me-4 perfil-radio-items",
                     inputStyle={"marginRight": "4px"},
