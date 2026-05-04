@@ -27,6 +27,7 @@ from pathlib import Path as _Path
 app = dash.Dash(
     __name__,
     assets_folder=str(_Path(__file__).resolve().parent.parent / "assets"),
+    meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1, viewport-fit=cover"}],
     external_stylesheets=[
         dbc.themes.BOOTSTRAP,
         "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css",
@@ -918,7 +919,7 @@ def _aba_dashboard():
             ),
         ]),
         dbc.CardBody(tabela_recebidos, style={"maxHeight": "320px", "overflowY": "auto", "padding": "0.5rem"}),
-    ], className="shadow-sm")
+    ], className="shadow-sm perfil-card-lateral")
 
     return html.Div([
         dcc.Store(id="store-pag-id"),
@@ -2378,7 +2379,7 @@ def _aba_perfil_aluno(aluno_id: int):
                 html.Div("Crédito Disponível", style={"fontSize": "11px", "color": "#888"}),
             ]),
         ], className="d-flex align-items-center"),
-    ], className="d-flex align-items-center p-3 mb-3",
+    ], className="d-flex align-items-center p-3 mb-3 perfil-barra-resumo",
        style={"background": "#fff", "borderRadius": "10px",
               "boxShadow": "0 2px 8px rgba(0,0,0,.07)"})
 
@@ -2556,7 +2557,7 @@ def _aba_perfil_aluno(aluno_id: int):
                 dbc.Button(id="btn-perfil-acao-confirmar", color="primary"),
             ]),
         ], id="modal-perfil-acao-mat", is_open=False),
-    ], style={"boxShadow": "0 2px 8px rgba(0,0,0,.07)"})
+    ], className="perfil-tab-panel", style={"boxShadow": "0 2px 8px rgba(0,0,0,.07)"})
 
     return html.Div([
         # Barra de busca rápida de aluno
@@ -2587,8 +2588,8 @@ def _aba_perfil_aluno(aluno_id: int):
             html.Span(" > Perfil", style={"color": "#aaa", "fontSize": "13px"}),
         ], className="mb-3"),
         dbc.Row([
-            dbc.Col(painel_esq, md=3),
-            dbc.Col([barra, tab_panel], md=9),
+            dbc.Col(painel_esq, xs=12, md=3),
+            dbc.Col([barra, tab_panel], xs=12, md=9),
         ], className="g-3"),
     ])
 

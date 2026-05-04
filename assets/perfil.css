@@ -27,3 +27,80 @@
   color: #0d6efd;
   font-weight: 700;
 }
+
+@media (max-width: 991.98px) {
+  .perfil-barra-resumo {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+
+  .perfil-barra-resumo > div {
+    margin-right: 0 !important;
+    width: calc(50% - 7px);
+  }
+
+  .perfil-tab-panel {
+    overflow: hidden;
+  }
+
+  #perfil-tabs-topo {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  #perfil-tabs-topo button,
+  #perfil-tabs-topo span {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .perfil-card-lateral {
+    margin-bottom: 8px;
+  }
+
+  .perfil-barra-resumo {
+    padding: 14px !important;
+  }
+
+  .perfil-barra-resumo > div {
+    width: 100%;
+  }
+
+  #perfil-fin-tabela,
+  #perfil-mat-tabela {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #perfil-fin-tabela table,
+  #perfil-mat-tabela table {
+    min-width: 720px;
+  }
+
+  #perfil-fin-tipo,
+  #perfil-fin-filtro,
+  #perfil-mat-filtro {
+    width: 100%;
+  }
+
+  #perfil-fin-tipo .form-check,
+  #perfil-fin-filtro .form-check,
+  #perfil-mat-filtro .form-check {
+    margin-right: 10px;
+    margin-bottom: 8px;
+  }
+
+  #btn-perfil-pag-lote,
+  #btn-perfil-nova-mat {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+
+  .modal-dialog {
+    margin: 0.75rem;
+  }
+}
