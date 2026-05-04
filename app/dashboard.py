@@ -2740,6 +2740,7 @@ def atualizar_perfil_financeiro(visao, _refresh, aluno_id):
                 html.Td(btn_edit, style={"textAlign": "right", "whiteSpace": "nowrap"}),
             ]))
         else:
+            linha_bg = "#f0fff4" if p["status"] == "pago" else ("#fff5f5" if is_venc else "")
             linhas.append(html.Tr([
                 html.Td(chk, style={"textAlign": "center", "width": "42px"}),
                 html.Td(_fmt_data(p["data_vencimento"]),
@@ -2759,10 +2760,13 @@ def atualizar_perfil_financeiro(visao, _refresh, aluno_id):
                                          "fontSize": "10px"})]
                       if desconto > 0 else []),
                 ], style={"textAlign": "right"}),
-                html.Td(dbc.Badge(status_txt, color=status_cor), style={"textAlign": "right", "whiteSpace": "nowrap"}),
+                html.Td([
+                    dbc.Badge(status_txt, color=status_cor),
+                    *( [html.Div(f"Recebida em {_fmt_data(p['data_pagamento'])}", style={"color": "#198754", "fontSize": "11px", "marginTop": "4px", "fontWeight": "600"})] if p["status"] == "pago" and p.get("data_pagamento") else [] ),
+                ], style={"textAlign": "right", "whiteSpace": "nowrap"}),
                 html.Td(([btn_ver, btn_edit] if p["status"] in ("pendente", "vencido") else [btn_edit]),
                         style={"textAlign": "right", "whiteSpace": "nowrap"}),
-            ], style={"backgroundColor": "#fff5f5" if is_venc else ""}))
+            ], style={"backgroundColor": linha_bg}))
 
     if not linhas:
         tabela = html.Div("Nenhum registro encontrado.", className="text-muted p-3")
