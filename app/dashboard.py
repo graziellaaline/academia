@@ -2654,6 +2654,10 @@ def _referencia_pagamento(pagamento: dict):
     return f"Mensalidade {periodo} - {modalidade} {plano}"
 
 
+def _vigencia_pagamento(pagamento: dict):
+    return _periodo_pagamento(pagamento.get("data_vencimento"), pagamento.get("plano_meses") or 1)
+
+
 # ── Perfil: tabela financeiro ─────────────────────────────────────────────
 
 @app.callback(
@@ -2704,6 +2708,7 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
         is_venc = (p["status"] == "vencido" or
                    (p["status"] == "pendente" and (p["data_vencimento"] or "") < hoje))
         referencia = _referencia_pagamento(p)
+        vigencia_txt = _vigencia_pagamento(p)
         data_principal = p["data_pagamento"] if tipo == "recebimentos" else p["data_vencimento"]
         btn_ver = dbc.Button(
             html.I(className="bi bi-cash-coin"),
@@ -2734,9 +2739,11 @@ def atualizar_perfil_financeiro(tipo, filtro, _refresh, aluno_id):
                    style={"color": "#dc3545" if (tipo == 'cobrancas' and is_venc) else "#333",
                           "fontWeight": "600", "whiteSpace": "nowrap"}),
             html.Td([
-                html.Div(referencia, style={"color": "#0d6efd"}),
-                *( [html.Small(f"Pago em {_fmt_data(p['data_pagamento'])}", style={"color": "#198754"})] if tipo == "recebimentos" and p.get("data_pagamento") else [] ),
-            ]),
+                html.Div(referencia, style={"color": "#0d6efd", "fontWeight": "600"}),
+                html.Div("Vigência do plano", style={"color": "#888", "fontSize": "11px", "marginTop": "4px"}),
+                html.Div(vigencia_txt, style={"color": COR_PRIMARIA, "fontWeight": "700", "fontSize": "12px"}),
+                *( [html.Div(f"Pago em {_fmt_data(p['data_pagamento'])}", style={"color": "#198754", "fontSize": "12px", "marginTop": "4px"})] if tipo == "recebimentos" and p.get("data_pagamento") else [] ),
+            ], style={"minWidth": "360px"}),
             html.Td([
                 html.Span(_fmt_brl(valor_liq),
                          style={"fontWeight": "700", "color": COR_PRIMARIA}),
@@ -2864,12 +2871,12 @@ def atualizar_perfil_matriculas(filtro, _refresh, aluno_id):
             html.Td([
                 html.Div(m["plano"], style={"color": "#0d6efd", "fontWeight": "600"}),
                 html.Small(m["modalidade"], style={"color": "#888"}),
-            ], style={"padding": "10px 14px"}),
+                html.Div("Vigência do plano", style={"color": "#888", "fontSize": "11px", "marginTop": "6px"}),
+                html.Div(vigencia_txt, style={"color": COR_PRIMARIA, "fontWeight": "700", "fontSize": "12px"}),
+            ], style={"padding": "10px 14px", "minWidth": "280px"}),
             html.Td([
                 html.Div(_fmt_data(m["data_inicio"]), style={"fontWeight": "600"}),
                 html.Div(vence_txt, style={"color": "#888", "fontSize": "12px"}),
-                html.Div("Vigência do plano", style={"color": "#888", "fontSize": "11px", "marginTop": "6px"}),
-                html.Div(vigencia_txt, style={"color": "#0d6efd", "fontWeight": "700", "fontSize": "12px"}),
                 *([html.Div(f"Encerrada em {data_enc_txt}", style={"color": "#888", "fontSize": "12px", "marginTop": "4px"})] if data_enc_txt else []),
             ], style={"padding": "10px 14px"}),
             html.Td(periodo, style={"padding": "10px 14px"}),
