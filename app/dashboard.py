@@ -2644,7 +2644,7 @@ def _periodo_pagamento(data_base: str, meses: int):
         return "—"
     inicio = date.fromisoformat(data_base)
     fim = inicio + relativedelta(months=meses or 1) - timedelta(days=1)
-    return f"{_fmt_data(inicio.isoformat())} a {_fmt_data(fim.isoformat())}"
+    return f"De {_fmt_data(inicio.isoformat())} até {_fmt_data(fim.isoformat())}"
 
 
 def _referencia_pagamento(pagamento: dict):
@@ -2823,7 +2823,7 @@ def atualizar_perfil_matriculas(filtro, _refresh, aluno_id):
     for m in matriculas:
         data_fim = date.fromisoformat(m["data_fim"]) if m.get("data_fim") else None
         vence_txt = f"Vence dia {data_fim.day}" if data_fim else "—"
-        vigencia_txt = f"{_fmt_data(m['data_inicio'])} até {_fmt_data(m['data_fim'])}"
+        vigencia_txt = f"De {_fmt_data(m['data_inicio'])} até {_fmt_data(m['data_fim'])}"
         periodo = "Mensal" if m.get("meses") == 1 else (
             f"{m['meses']} meses" if m.get("meses") else "—")
         motivo_txt = MOTIVO_MATRICULA_LABELS.get(m.get("motivo_encerramento") or "", "")
