@@ -2242,7 +2242,7 @@ def _perfil_tab_financeiro(aluno_id):
     hoje = date.today().isoformat()
     return html.Div([
         dcc.Store(id="store-perfil-fin-tipo",   data="cobrancas"),
-        dcc.Store(id="store-perfil-fin-filtro", data="abertas"),
+        dcc.Store(id="store-perfil-fin-filtro", data="todas"),
         html.Div([
             html.Div([
                 dbc.RadioItems(
@@ -2258,7 +2258,7 @@ def _perfil_tab_financeiro(aluno_id):
                     options=[{"label": "Abertas",    "value": "abertas"},
                              {"label": "Canceladas", "value": "canceladas"},
                              {"label": "Todas",      "value": "todas"}],
-                    value="abertas", inline=True, className="perfil-radio-items",
+                    value="todas", inline=True, className="perfil-radio-items",
                     inputStyle={"marginRight": "4px"},
                 ),
             ], className="d-flex align-items-center", style={"flexWrap": "wrap", "gap": "8px"}),
